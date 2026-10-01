@@ -1,4 +1,6 @@
 import os
+import json
+import base64
 import streamlit as st
 import pandas as pd
 import gspread
@@ -15,37 +17,6 @@ st.set_page_config(
 )
 
 # -----------------------------------------------------------------------------
-# FUNÇÃO DE TRATAMENTO DE CHAVE PRIVADA (PEM)
-# -----------------------------------------------------------------------------
-def formatar_chave_privada(key: str) -> str:
-    """
-    Remove barras invertidas, quebras de linha corrompidas e reconstrói 
-    o bloco Base64 em formato PEM válido para a biblioteca de criptografia.
-    """
-    if not key:
-        return key
-
-    # Converter sequências literais '\n' em quebras de linha reais
-    key = key.replace("\\n", "\n")
-
-    header = "-----BEGIN PRIVATE KEY-----"
-    footer = "-----END PRIVATE KEY-----"
-
-    if header in key and footer in key:
-        # Extrai exatamente o conteúdo Base64 localizado entre o cabeçalho e o rodapé
-        partes = key.split(header)
-        corpo_e_rodape = partes[1].split(footer)
-        corpo = corpo_e_rodape[0]
-
-        # Limpa todos os espaços, quebras de linha e caracteres invisíveis
-        corpo_limpo = "".join(corpo.split())
-
-        # Reconstrói no formato PEM limpo esperado pelo Python
-        return f"{header}\n{corpo_limpo}\n{footer}\n"
-
-    return key
-
-# -----------------------------------------------------------------------------
 # FUNÇÃO DE AUTENTICAÇÃO COM GOOGLE SHEETS
 # -----------------------------------------------------------------------------
 @st.cache_resource
@@ -55,18 +26,15 @@ def conectar_google_sheets():
         "https://www.googleapis.com/auth/drive"
     ]
 
-    # 1. Autenticação via Secrets do Streamlit Cloud
-    if "google_sheets" in st.secrets:
-        creds_dict = dict(st.secrets["google_sheets"])
-        
-        # Formatação automática e sanitização da chave
-        if "private_key" in creds_dict:
-            creds_dict["private_key"] = formatar_chave_privada(creds_dict["private_key"])
-
+    # 1. Método Base64 (Inviolável no Streamlit Cloud - sem erros de quebra de linha)
+    if "GCP_JSON_B64" in st.secrets:
+        b64_data = st.secrets["GCP_JSON_B64"]
+        creds_json = base64.b64decode(b64_data).decode("utf-8")
+        creds_dict = json.loads(creds_json)
         creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
         return gspread.authorize(creds)
 
-    # 2. Autenticação via ficheiro local
+    # 2. Método local no seu PC (service_account.json)
     elif os.path.exists("service_account.json"):
         creds = Credentials.from_service_account_file("service_account.json", scopes=scopes)
         return gspread.authorize(creds)
@@ -82,10 +50,10 @@ def conectar_google_sheets():
 def carregar_dados():
     try:
         client = conectar_google_sheets()
-        
+
         nome_planilha = "Orcamentos"
-        if "google_sheets" in st.secrets and "planilha_nome" in st.secrets["google_sheets"]:
-            nome_planilha = st.secrets["google_sheets"]["planilha_nome"]
+        if "planilha_nome" in st.secrets:
+            nome_planilha = st.secrets["planilha_nome"]
 
         sheet = client.open(nome_planilha)
 
@@ -99,7 +67,7 @@ def carregar_dados():
 
     except Exception as e:
         st.error(f"Erro ao ligar ao Google Sheets: {e}")
-        st.info("Verifique se partilhou a planilha do Google Drive com o e-mail da conta de serviço com acesso de Leitor/Editor.")
+        st.info("Verifique se partilhou a planilha do Google Drive com o e-mail: orca-451@telao-510314.iam.gserviceaccount.com")
         return pd.DataFrame()
 
 # -----------------------------------------------------------------------------
@@ -122,9 +90,7 @@ def main():
         st.warning("Nenhum dado encontrado na planilha ou erro de ligação.")
         return
 
-    col1, col2 = st.columns(2)
-    col1.metric("Total de Orçamentos", len(df))
-
+    st.metric("Total de Orçamentos", len(df))
     st.markdown("---")
     st.subheader("📋 Registos de Orçamentos")
     st.dataframe(df, use_container_width=True)
