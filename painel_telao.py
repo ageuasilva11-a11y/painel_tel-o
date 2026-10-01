@@ -5,27 +5,12 @@ from google.oauth2.service_account import Credentials
 import pandas as pd
 import streamlit as st
 
-# Configuração da página para ocupar a largura total (ideal para TVs)
 st.set_page_config(
     page_title="Painel de Orçamentos - Amazon Paisagística",
     page_icon="🌱",
     layout="wide",
 )
 
-# Estilização CSS personalizada para modo "Telão"
-st.markdown(
-    """
-    <style>
-    .main {
-        background-color: #0e1117;
-        color: #ffffff;
-    }
-    </style>
-""",
-    unsafe_allow_html=True,
-)
-
-# Cabeçalho do Telão
 st.title("🌱 AMAZON PAISAGÍSTICA AMBIENTAL - PAINEL DE OBRAS")
 st.markdown(
     f"**Estado Comercial em Tempo Real** | Atualizado: {datetime.now().strftime('%d/%m/%Y %H:%M')}"
@@ -33,11 +18,9 @@ st.markdown(
 st.markdown("---")
 
 
-# Função para carregar os dados reais direto do Google Sheets de forma segura
-@st.cache_data(ttl=60)  # Atualiza automaticamente a cada 60 segundos
+@st.cache_data(ttl=60)
 def carregar_dados_google_sheets():
     try:
-        # Lê a string JSON completa dos segredos e converte-a num dicionário Python
         credentials_dict = json.loads(
             st.secrets["gcp_service_account"]["service_account_json"]
         )
@@ -51,7 +34,6 @@ def carregar_dados_google_sheets():
         )
         client = gspread.authorize(creds)
 
-        # Abre a planilha "Orcamentos" e a aba com o mesmo nome
         sheet = client.open("Orcamentos").worksheet("Orcamentos")
         dados = sheet.get_all_records()
 
@@ -71,10 +53,8 @@ def carregar_dados_google_sheets():
         )
 
 
-# Carrega os dados reais
 df = carregar_dados_google_sheets()
 
-# Tratamento e limpeza da coluna de valores para garantir formato numérico
 if not df.empty and "Valor (R$)" in df.columns:
     df["Valor (R$)"] = (
         df["Valor (R$)"]
@@ -85,7 +65,6 @@ if not df.empty and "Valor (R$)" in df.columns:
     )
     df["Valor (R$)"] = pd.to_numeric(df["Valor (R$)"], errors="coerce").fillna(0)
 
-# --- MÉTRICAS PRINCIPAIS (KPIs) ---
 total_orcamentos = len(df)
 valor_total_geral = df["Valor (R$)"].sum() if not df.empty else 0
 
@@ -138,7 +117,6 @@ with kpi4:
 
 st.markdown("---")
 
-# --- TABELAS VISUAIS PARA O TELÃO ---
 col_tabela1, col_tabela2 = st.columns(2)
 
 with col_tabela1:
@@ -163,7 +141,6 @@ with col_tabela2:
     else:
         st.info("Nenhum orçamento concretizado registado na planilha.")
 
-# Rodapé de atualização automática
 st.markdown(
     "<p style='text-align: center; color: gray; font-size: 14px;'>Painel sincronizado com a Base de Dados da Amazon Paisagística Ambiental (Atualização automática a cada 60s).</p>",
     unsafe_allow_html=True,
