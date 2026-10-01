@@ -1,4 +1,6 @@
 from datetime import datetime
+import gspread
+from google.oauth2.service_account import Credentials
 import pandas as pd
 import streamlit as st
 
@@ -30,55 +32,63 @@ st.markdown(
 st.markdown("---")
 
 
-# Função para carregar os dados reais direto do Google Sheets
+# Função para carregar os dados reais direto do Google Sheets de forma segura
 @st.cache_data(ttl=60)  # Atualiza automaticamente a cada 60 segundos
 def carregar_dados_google_sheets():
     try:
-        # Lê a folha de cálculo pública ou configurada via st.connection
-        # Substitua 'SuaPlanilhaDeOrcamentos' pelo nome exato da aba no Google Sheets
-        df = st.conn.read(worksheet="Orcamentos", ttl=60)
+        # Lê as credenciais privadas guardadas no secrets.toml
+        credentials_dict = dict(st.secrets["gcp_service_account"])
+
+        scopes = [
+            "https://www.googleapis.com/auth/spreadsheets",
+            "https://www.googleapis.com/auth/drive",
+        ]
+        creds = Credentials.from_service_account_info(
+            credentials_dict, scopes=scopes
+        )
+        client = gspread.authorize(creds)
+
+        # Abre a planilha "Orcamentos" e a aba com o mesmo nome (ou ajuste a aba se necessário)
+        sheet = client.open("Orcamentos").worksheet("Orcamentos")
+        dados = sheet.get_all_records()
+
+        df = pd.DataFrame(dados)
+        if df.empty:
+            return pd.DataFrame(
+                columns=[
+                    "Nº Orçamento",
+                    "Cliente",
+                    "Serviço",
+                    "Valor (R$)",
+                    "Status",
+                ]
+            )
         return df
+
     except Exception as e:
-        # Fallback de segurança caso a ligação ainda esteja a ser configurada
-        st.warning(
-            "A aguardar ligação ao Google Sheets. A exibir dados temporários."
+        st.error(
+            f"Erro ao ligar ao Google Sheets: {e}. Verifique se partilhou a planilha 'Orcamentos' com o e-mail da conta de serviço."
         )
         return pd.DataFrame(
-            {
-                "Nº Orçamento": ["ORC-2026/01"],
-                "Cliente": ["A configurar"],
-                "Serviço": ["A ligar ao Google Sheets"],
-                "Valor (R$)": [0.0],
-                "Status": ["Em Andamento"],
-            }
+            columns=["Nº Orçamento", "Cliente", "Serviço", "Valor (R$)", "Status"]
         )
 
 
-# Alternativamente, para testar rápido com link público do CSV da planilha do Google:
-@st.cache_data(ttl=60)
-def carregar_dados_csv():
-    # Cole aqui o link de publicação em CSV da sua planilha do Google Sheets se preferir método direto
-    url_csv = "COLE_AQUI_O_LINK_CSV_DO_GOOGLE_SHEETS_SE_QUISER"
-    # return pd.read_csv(url_csv)
-    # Por enquanto, mantemos a estrutura pronta para receber os seus dados reais:
-    return pd.DataFrame(
-        columns=["Nº Orçamento", "Cliente", "Serviço", "Valor (R$)", "Status"]
-    )
+# Carrega os dados reais
+df = carregar_dados_google_sheets()
 
-
-# Carregando os dados (Pode usar a ligação do Google Sheets do Streamlit)
-# Dica: No Streamlit Cloud, configuramos os segredos para ler do Google Sheets de forma privada e segura.
-df = (
-    carregar_dados_google_sheets()
-)  # Ou substitua pela leitura direta do seu ficheiro/Sheets
-
-
-# Se já tiver os dados a vir da planilha, garantimos que a coluna de valor é numérica:
+# Tratamento e limpeza da coluna de valores para garantir formato numérico
 if not df.empty and "Valor (R$)" in df.columns:
-    df["Valor (R$)"] = pd.to_numeric(
-        df["Valor (R$)"].astype(str).str.replace("R$", "").str.replace(",", "."),
-        errors="coerce",
-    ).fillna(0)
+    df["Valor (R$)"] = (
+        df["Valor (R$)"]
+        .astype(str)
+        .str.replace("R$", "", regex=False)
+        .str.replace(".", "", regex=False)
+        .str.replace(",", ".", regex=False)
+    )
+    df["Valor (R$)"] = pd.to_numeric(df["Valor (R$)"], errors="coerce").fillna(
+        0
+    )
 
 # --- MÉTRICAS PRINCIPAIS (KPIs) ---
 total_orcamentos = len(df)
@@ -90,7 +100,9 @@ df_andamento = (
     else pd.DataFrame()
 )
 df_concretizado = (
-    df[df["Status"].str.contains("Concretizado|Obra", case=False, na=False)]
+    df[
+        df["Status"].str.contains("Concretizado|Obra|Fechado", case=False, na=False)
+    ]
     if not df.empty
     else pd.DataFrame()
 )
