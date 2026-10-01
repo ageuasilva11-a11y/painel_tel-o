@@ -20,15 +20,13 @@ st.markdown("---")
 @st.cache_data(ttl=60)
 def carregar_dados_google_sheets():
     try:
-        # Lê o dicionário diretamente do TOML plano do Streamlit
-        credentials_dict = dict(st.secrets["gcp_service_account"])
-
         scopes = [
             "https://www.googleapis.com/auth/spreadsheets",
             "https://www.googleapis.com/auth/drive",
         ]
-        creds = Credentials.from_service_account_info(
-            credentials_dict, scopes=scopes
+        # Carrega diretamente o ficheiro JSON local
+        creds = Credentials.from_service_account_file(
+            "service_account.json", scopes=scopes
         )
         client = gspread.authorize(creds)
 
@@ -44,13 +42,14 @@ def carregar_dados_google_sheets():
 
     except Exception as e:
         st.error(
-            f"Erro ao ligar ao Google Sheets: {e}. Verifique se partilhou a planilha 'Orcamentos' com o e-mail (`orca-451@telao-510314.iam.gserviceaccount.com`)."
+            f"Erro ao ligar ao Google Sheets: {e}. Verifique se partilhou a planilha 'Orcamentos' com o e-mail da conta de serviço."
         )
         return pd.DataFrame(
             columns=["Nº Orçamento", "Cliente", "Serviço", "Valor (R$)", "Status"]
         )
 
 
+# Restante do código do seu painel...
 df = carregar_dados_google_sheets()
 
 if not df.empty and "Valor (R$)" in df.columns:
