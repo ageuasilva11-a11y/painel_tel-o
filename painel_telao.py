@@ -3,6 +3,7 @@ import gspread
 from google.oauth2.service_account import Credentials
 import pandas as pd
 import streamlit as st
+import json
 
 # Configuração da página para ocupar a largura total (ideal para TVs)
 st.set_page_config(
@@ -36,8 +37,6 @@ st.markdown("---")
 @st.cache_data(ttl=60)  # Atualiza automaticamente a cada 60 segundos
 def carregar_dados_google_sheets():
     try:
-import json
-
 # Dentro da função carregar_dados_google_sheets():
 credentials_dict = json.loads(
     st.secrets["gcp_service_account"]["service_account_json"]
