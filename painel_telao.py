@@ -37,10 +37,10 @@ st.markdown("---")
 @st.cache_data(ttl=60)  # Atualiza automaticamente a cada 60 segundos
 def carregar_dados_google_sheets():
     try:
-# Dentro da função carregar_dados_google_sheets():
-credentials_dict = json.loads(
-    st.secrets["gcp_service_account"]["service_account_json"]
-)
+        # Lê e desserializa o JSON completo guardado na variável do secrets.toml
+        credentials_dict = json.loads(
+            st.secrets["gcp_service_account"]["service_account_json"]
+        )
 
         scopes = [
             "https://www.googleapis.com/auth/spreadsheets",
