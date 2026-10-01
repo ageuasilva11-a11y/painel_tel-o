@@ -3,7 +3,6 @@ import gspread
 from google.oauth2.service_account import Credentials
 import pandas as pd
 import streamlit as st
-import json
 
 # Configuração da página para ocupar a largura total (ideal para TVs)
 st.set_page_config(
@@ -37,10 +36,8 @@ st.markdown("---")
 @st.cache_data(ttl=60)  # Atualiza automaticamente a cada 60 segundos
 def carregar_dados_google_sheets():
     try:
-        # Lê e desserializa o JSON completo guardado na variável do secrets.toml
-        credentials_dict = json.loads(
-            st.secrets["gcp_service_account"]["service_account_json"]
-        )
+        # Lê diretamente as credenciais do TOML plano configurado nos segredos
+        credentials_dict = dict(st.secrets["gcp_service_account"])
 
         scopes = [
             "https://www.googleapis.com/auth/spreadsheets",
