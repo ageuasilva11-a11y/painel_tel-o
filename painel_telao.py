@@ -38,7 +38,7 @@ st.markdown("---")
 def carregar_dados_google_sheets():
   try:
     # Lê e converte corretamente o JSON guardado nos segredos do Streamlit
-    credentials_dict = dict(st.secrets["gcp_service_account"])
+    credentials_dict = json.loads(st.secrets["gcp_service_account"]["service_account_json"])
     scopes = [
         "https://www.googleapis.com/auth/spreadsheets",
         "https://www.googleapis.com/auth/drive",
