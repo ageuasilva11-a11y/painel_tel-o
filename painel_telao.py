@@ -1,6 +1,4 @@
 import os
-import json
-import base64
 import streamlit as st
 import pandas as pd
 import gspread
@@ -26,21 +24,23 @@ def conectar_google_sheets():
         "https://www.googleapis.com/auth/drive"
     ]
 
-    # 1. Método Base64 (Inviolável no Streamlit Cloud - sem erros de quebra de linha)
-    if "GCP_JSON_B64" in st.secrets:
-        b64_data = st.secrets["GCP_JSON_B64"]
-        creds_json = base64.b64decode(b64_data).decode("utf-8")
-        creds_dict = json.loads(creds_json)
+    # 1. Autenticação no Streamlit Cloud (via Secrets)
+    if "google_sheets" in st.secrets:
+        creds_dict = dict(st.secrets["google_sheets"])
+        if "private_key" in creds_dict:
+            # Converte \n em quebras de linha reais se necessário
+            creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
+        
         creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
         return gspread.authorize(creds)
 
-    # 2. Método local no seu PC (service_account.json)
+    # 2. Autenticação Local (no seu computador)
     elif os.path.exists("service_account.json"):
         creds = Credentials.from_service_account_file("service_account.json", scopes=scopes)
         return gspread.authorize(creds)
 
     else:
-        st.error("Credenciais do Google Sheets não encontradas nos Secrets!")
+        st.error("Credenciais do Google Sheets não encontradas!")
         st.stop()
 
 # -----------------------------------------------------------------------------
@@ -50,10 +50,10 @@ def conectar_google_sheets():
 def carregar_dados():
     try:
         client = conectar_google_sheets()
-
+        
         nome_planilha = "Orcamentos"
-        if "planilha_nome" in st.secrets:
-            nome_planilha = st.secrets["planilha_nome"]
+        if "google_sheets" in st.secrets and "planilha_nome" in st.secrets["google_sheets"]:
+            nome_planilha = st.secrets["google_sheets"]["planilha_nome"]
 
         sheet = client.open(nome_planilha)
 
@@ -67,7 +67,7 @@ def carregar_dados():
 
     except Exception as e:
         st.error(f"Erro ao ligar ao Google Sheets: {e}")
-        st.info("Verifique se partilhou a planilha do Google Drive com o e-mail: orca-451@telao-510314.iam.gserviceaccount.com")
+        st.info("Verifique se partilhou a planilha do Google Drive com o e-mail da conta de serviço.")
         return pd.DataFrame()
 
 # -----------------------------------------------------------------------------
