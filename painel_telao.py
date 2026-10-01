@@ -15,6 +15,37 @@ st.set_page_config(
 )
 
 # -----------------------------------------------------------------------------
+# FUNÇÃO DE TRATAMENTO DE CHAVE PRIVADA (PEM)
+# -----------------------------------------------------------------------------
+def formatar_chave_privada(key: str) -> str:
+    """
+    Remove barras invertidas, quebras de linha corrompidas e reconstrói 
+    o bloco Base64 em formato PEM válido para a biblioteca de criptografia.
+    """
+    if not key:
+        return key
+
+    # Converter sequências literais '\n' em quebras de linha reais
+    key = key.replace("\\n", "\n")
+
+    header = "-----BEGIN PRIVATE KEY-----"
+    footer = "-----END PRIVATE KEY-----"
+
+    if header in key and footer in key:
+        # Extrai exatamente o conteúdo Base64 localizado entre o cabeçalho e o rodapé
+        partes = key.split(header)
+        corpo_e_rodape = partes[1].split(footer)
+        corpo = corpo_e_rodape[0]
+
+        # Limpa todos os espaços, quebras de linha e caracteres invisíveis
+        corpo_limpo = "".join(corpo.split())
+
+        # Reconstrói no formato PEM limpo esperado pelo Python
+        return f"{header}\n{corpo_limpo}\n{footer}\n"
+
+    return key
+
+# -----------------------------------------------------------------------------
 # FUNÇÃO DE AUTENTICAÇÃO COM GOOGLE SHEETS
 # -----------------------------------------------------------------------------
 @st.cache_resource
@@ -28,12 +59,9 @@ def conectar_google_sheets():
     if "google_sheets" in st.secrets:
         creds_dict = dict(st.secrets["google_sheets"])
         
-        # Tratamento rigoroso e automático da chave privada (PEM)
+        # Formatação automática e sanitização da chave
         if "private_key" in creds_dict:
-            pk = creds_dict["private_key"]
-            pk = pk.replace("\\n", "\n")
-            lines = [line.strip() for line in pk.split("\n") if line.strip()]
-            creds_dict["private_key"] = "\n".join(lines) + "\n"
+            creds_dict["private_key"] = formatar_chave_privada(creds_dict["private_key"])
 
         creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
         return gspread.authorize(creds)
@@ -44,7 +72,7 @@ def conectar_google_sheets():
         return gspread.authorize(creds)
 
     else:
-        st.error("Credenciais do Google Sheets não encontradas!")
+        st.error("Credenciais do Google Sheets não encontradas nos Secrets!")
         st.stop()
 
 # -----------------------------------------------------------------------------
@@ -94,7 +122,6 @@ def main():
         st.warning("Nenhum dado encontrado na planilha ou erro de ligação.")
         return
 
-    # Indicadores
     col1, col2 = st.columns(2)
     col1.metric("Total de Orçamentos", len(df))
 
