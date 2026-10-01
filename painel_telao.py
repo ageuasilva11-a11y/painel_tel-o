@@ -24,23 +24,26 @@ def conectar_google_sheets():
         "https://www.googleapis.com/auth/drive"
     ]
 
-    # 1. Autenticação no Streamlit Cloud (via Secrets)
+    # 1. Autenticação via Streamlit Cloud Secrets (Bloco [google_sheets])
     if "google_sheets" in st.secrets:
         creds_dict = dict(st.secrets["google_sheets"])
-        if "private_key" in creds_dict:
-            # Converte \n em quebras de linha reais se necessário
-            creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
         
+        # Tratamento sanitizado para a chave privada (PEM)
+        if "private_key" in creds_dict:
+            pk = creds_dict["private_key"]
+            pk = pk.replace("\\n", "\n").replace("\r", "")
+            creds_dict["private_key"] = pk
+
         creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
         return gspread.authorize(creds)
 
-    # 2. Autenticação Local (no seu computador)
+    # 2. Autenticação Local (ficheiro service_account.json na raiz)
     elif os.path.exists("service_account.json"):
         creds = Credentials.from_service_account_file("service_account.json", scopes=scopes)
         return gspread.authorize(creds)
 
     else:
-        st.error("Credenciais do Google Sheets não encontradas!")
+        st.error("Credenciais do Google Sheets não encontradas! Verifique o Secrets no Streamlit Cloud ou o arquivo local.")
         st.stop()
 
 # -----------------------------------------------------------------------------
@@ -67,7 +70,7 @@ def carregar_dados():
 
     except Exception as e:
         st.error(f"Erro ao ligar ao Google Sheets: {e}")
-        st.info("Verifique se partilhou a planilha do Google Drive com o e-mail da conta de serviço.")
+        st.info("Verifique se partilhou a planilha do Google Drive com o e-mail da conta de serviço com acesso de Editor/Leitor.")
         return pd.DataFrame()
 
 # -----------------------------------------------------------------------------
@@ -90,9 +93,40 @@ def main():
         st.warning("Nenhum dado encontrado na planilha ou erro de ligação.")
         return
 
-    st.metric("Total de Orçamentos", len(df))
+    # Indicador Geral
+    st.metric("Total de Registos", len(df))
     st.markdown("---")
-    st.subheader("📋 Registos de Orçamentos")
+
+    # -------------------------------------------------------------------------
+    # SECÇÃO: OBRAS CONCRETIZADAS (FECHADAS)
+    # -------------------------------------------------------------------------
+    st.subheader("🚀 Obras Concretizadas (Fechadas)")
+
+    # Tenta identificar automaticamente colunas de status/situação na planilha
+    colunas_possiveis = ["Status", "Situação", "Situacao", "Estado", "Fechado"]
+    coluna_status = next((col for col in colunas_possiveis if col in df.columns), None)
+
+    if coluna_status:
+        # Filtra linhas onde o status contenha termos indicativos de concretizado/fechado
+        termos_sucesso = ["fechado", "concretizado", "concluído", "concluido", "aprovado", "ganho"]
+        df_fechadas = df[
+            df[coluna_status].astype(str).str.lower().str.contains("|".join(termos_sucesso), na=False)
+        ]
+    else:
+        df_fechadas = pd.DataFrame()
+
+    if not df_fechadas.empty:
+        st.success(f"Encontradas {len(df_fechadas)} obras concretizadas.")
+        st.dataframe(df_fechadas, use_container_width=True)
+    else:
+        st.info("Nenhum orçamento concretizado registado na planilha.")
+
+    st.markdown("---")
+
+    # -------------------------------------------------------------------------
+    # TABELA COMPLETA DE REGISTOS
+    # -------------------------------------------------------------------------
+    st.subheader("📋 Todos os Orçamentos Registados")
     st.dataframe(df, use_container_width=True)
 
 if __name__ == "__main__":
