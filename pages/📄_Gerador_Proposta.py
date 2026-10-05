@@ -220,6 +220,8 @@ if st.session_state.proposta:
         style_header_sub = ParagraphStyle("HeaderSub", parent=styles["Normal"], fontSize=7.5, leading=9.5, alignment=1)
         style_section = ParagraphStyle("SecStyle", parent=styles["Heading2"], fontSize=8.5, leading=10.5, textColor=colors.HexColor("#004d00"), spaceBefore=5, spaceAfter=2)
         style_body = ParagraphStyle("BodyStyle", parent=styles["Normal"], fontSize=7.5, leading=9.5)
+        style_table_cell = ParagraphStyle("TableCell", parent=styles["Normal"], fontSize=7.5, leading=9.5)
+        style_table_right = ParagraphStyle("TableRight", parent=styles["Normal"], fontSize=7.5, leading=9.5, alignment=2)
         style_bold_center = ParagraphStyle("BoldCenter", parent=styles["Normal"], fontSize=7.5, leading=9.5, alignment=1, fontName="Helvetica-Bold")
         style_direita = ParagraphStyle("DireitaStyle", parent=styles["Normal"], fontSize=7.5, leading=9.5, alignment=2)
         style_centro = ParagraphStyle("CentroStyle", parent=styles["Normal"], fontSize=7.5, leading=9.5, alignment=1)
@@ -248,27 +250,41 @@ if st.session_state.proposta:
         elements.append(Spacer(1, 4))
 
         elements.append(Paragraph("<b>RESUMO FINAL / COMPOSIÇÃO DOS SERVIÇOS</b>", style_section))
-        table_data = [["Item", "Descrição dos Serviços", "Área (m²)", "Vlr. Unit. (R$)", "Total (R$)"]]
+        
+        # Cabeçalho da Tabela com Paragraphs para garantir alinhamento perfeito
+        table_data = [[
+            Paragraph("<b>Item</b>", style_body),
+            Paragraph("<b>Descrição dos Serviços</b>", style_body),
+            Paragraph("<b>Área (m²)</b>", style_table_right),
+            Paragraph("<b>Vlr. Unit. (R$)</b>", style_table_right),
+            Paragraph("<b>Total (R$)</b>", style_table_right)
+        ]]
+
         for row in st.session_state.proposta:
             table_data.append([
-                str(row["Item"]),
-                row["Serviço"],
-                formatar_numero_br(row["Quantidade (m²)"]),
-                formatar_moeda_br(row["Preço Unitário (R$)"]),
-                formatar_moeda_br(row["Valor Total (R$)"])
+                Paragraph(str(row["Item"]), style_table_cell),
+                Paragraph(row["Serviço"], style_table_cell),  # Agora com quebra de linha automática
+                Paragraph(formatar_numero_br(row["Quantidade (m²)"]), style_table_right),
+                Paragraph(formatar_moeda_br(row["Preço Unitário (R$)"]), style_table_right),
+                Paragraph(formatar_moeda_br(row["Valor Total (R$)"]), style_table_right)
             ])
-        table_data.append(["", "VALOR GLOBAL DA PROPOSTA", "", "", formatar_moeda_br(valor_total)])
+            
+        table_data.append([
+            "", 
+            Paragraph("<b>VALOR GLOBAL DA PROPOSTA</b>", style_table_cell), 
+            "", 
+            "", 
+            Paragraph(f"<b>{formatar_moeda_br(valor_total)}</b>", style_table_right)
+        ])
 
-        # Larguras ajustadas para evitar sobreposições (Total de largura útil = ~545 pt)
+        # Larguras ajustadas para distribuição ideal (~545 pt)
         t = Table(table_data, colWidths=[30, 265, 75, 80, 95])
         t.setStyle(TableStyle([
             ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#004d00")),
             ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-            ("FONTSIZE", (0, 0), (-1, -1), 7.5),
-            ("ALIGN", (2, 0), (-1, -1), "RIGHT"),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
             ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
             ("BACKGROUND", (0, -1), (-1, -1), colors.HexColor("#e6ffe6")),
-            ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"),
         ]))
         elements.append(t)
         elements.append(Spacer(1, 4))
@@ -322,7 +338,6 @@ if st.session_state.proposta:
         elements.append(Paragraph(aviso_confidencial, style_body))
         elements.append(Spacer(1, 6))
 
-        # Bloco de Assinatura limpo (sem texto de assinatura digital)
         bloco_assinatura = [
             Paragraph(f"Manaus/AM, {data_atual_str}.", style_direita),
             Spacer(1, 20),
