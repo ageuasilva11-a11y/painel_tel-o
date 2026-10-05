@@ -51,7 +51,7 @@ st.set_page_config(
 
 st.title("📄 Gerador de Proposta Comercial e Registo Automático")
 st.markdown(
-    "Ajuste os dados do cliente, obra e serviços para gerar a proposta em PDF no modelo oficial e gravá-la no Google Sheets."
+    "Ajuste os dados do cliente, obra, condições de pagamento e serviços para gerar a proposta em PDF no modelo oficial e gravá-la no Google Sheets."
 )
 
 PRECOS_PADRAO = {
@@ -124,6 +124,24 @@ with st.sidebar:
     local_obra = st.text_input("Local da Obra", "KM 319 - Careiro Castanho/AM")
 
     st.markdown("---")
+    st.header("💳 Condições de Pagamento")
+    OPCOES_PCT = {
+        "30% Entr. / 60% Exec. / 10% Final": (30, 60, 10),
+        "50% Entr. / 50% Final": (50, 50, 0),
+        "40% Entr. / 60% Final": (40, 60, 0),
+        "Personalizado": None,
+    }
+    opcao_porcentagem = st.selectbox("Divisão de Pagamento", list(OPCOES_PCT.keys()))
+
+    if opcao_porcentagem == "Personalizado":
+        pct_sinal = st.number_input("% de Entrada (Sinal)", min_value=0, max_value=100, value=30)
+        pct_exec = st.number_input("% na Execução", min_value=0, max_value=100 - pct_sinal, value=60)
+        pct_final = 100 - (pct_sinal + pct_exec)
+        st.write(f"Restante para Finalização: **{pct_final}%**")
+    else:
+        pct_sinal, pct_exec, pct_final = OPCOES_PCT[opcao_porcentagem]
+
+    st.markdown("---")
     st.header("⏱ Prazos e Condicionantes")
     prazo_mobilizacao = st.text_input("Prazo de Mobilização", "07 (SETE) dias após assinatura do contrato")
     prazo_execucao = st.text_input("Prazo de Execução", "Conforme cronograma operacional aprovado para a frente de obra")
@@ -164,10 +182,10 @@ if st.session_state.proposta:
     df = pd.DataFrame(st.session_state.proposta)
     valor_total = df["Valor Total (R$)"].sum()
     
-    # Condições de pagamento fixas (30%, 60%, 10%)
-    val_30 = valor_total * 0.30
-    val_60 = valor_total * 0.60
-    val_10 = valor_total * 0.10
+    # Cálculos dinâmicos baseados na seleção da barra lateral
+    val_sinal = (valor_total * pct_sinal) / 100
+    val_exec = (valor_total * pct_exec) / 100
+    val_final = (valor_total * pct_final) / 100 if pct_final > 0 else 0
 
     col1, col2 = st.columns([2, 1])
     with col1:
@@ -175,7 +193,12 @@ if st.session_state.proposta:
         st.dataframe(df, use_container_width=True)
     with col2:
         st.info(f"**Local da Obra:** {local_obra}")
-        st.success(f"**Valor Global:** {formatar_moeda_br(valor_total)}\n\n• **30% Sinal:** {formatar_moeda_br(val_30)}\n• **60% Execução:** {formatar_moeda_br(val_60)}\n• **10% Final:** {formatar_moeda_br(val_10)}")
+        resumo_pagamento = f"• **{pct_sinal}% Sinal:** {formatar_moeda_br(val_sinal)}"
+        if pct_exec > 0:
+            resumo_pagamento += f"\n• **{pct_exec}% Execução:** {formatar_moeda_br(val_exec)}"
+        if pct_final > 0:
+            resumo_pagamento += f"\n• **{pct_final}% Final:** {formatar_moeda_br(val_final)}"
+        st.success(f"**Valor Global:** {formatar_moeda_br(valor_total)}\n\n{resumo_pagamento}")
 
     def gerar_pdf():
         buffer = io.BytesIO()
@@ -262,103 +285,17 @@ if st.session_state.proposta:
         elements.append(Paragraph(etapas_texto, style_body))
         elements.append(Spacer(1, 4))
 
-        # Condições de Pagamento (Fixas: 30%, 60%, 10%)
+        # Condições de Pagamento Dinâmicas
+        pag_linhas = [f"<b>VALOR TOTAL DA PROPOSTA:</b> {formatar_moeda_br(valor_total)}."]
+        pag_linhas.append(f"• <b>{pct_sinal}% do valor total ({formatar_moeda_br(val_sinal)})</b> na assinatura do contrato para mobilização de funcionários, insumos e equipamentos. (via PIX - CNPJ: 44.246.097/0001-92 - MJ GOMES DE MORAES).")
+        if pct_exec > 0:
+            pag_linhas.append(f"• <b>{pct_exec}% do valor total ({formatar_moeda_br(val_exec)})</b> na aplicação dos serviços através de emissão de Nota Fiscal Eletrônica e pagamento via Boleto Bancário.")
+        if pct_final > 0:
+            pag_linhas.append(f"• <b>{pct_final}% do valor total ({formatar_moeda_br(val_final)})</b> no fechamento / medição final através de emissão de Nota Fiscal Eletrônica e pagamento via Boleto Bancário.")
+
         elements.append(Paragraph("<b>CONDIÇÕES DE PAGAMENTO E VALORES</b>", style_section))
-        pag_texto = f"""
-        <b>VALOR TOTAL DA PROPOSTA:</b> {formatar_moeda_br(valor_total)}.<br/>
-        • <b>30% do valor total ({formatar_moeda_br(val_30)})</b> na assinatura do contrato para mobilização de funcionários, insumos e equipamentos. (via PIX - CNPJ: 44.246.097/0001-92 - MJ GOMES DE MORAES).<br/>
-        • <b>60% do valor total ({formatar_moeda_br(val_60)})</b> na aplicação dos serviços através de emissão de Nota Fiscal Eletrônica e pagamento via Boleto Bancário.<br/>
-        • <b>10% do valor total ({formatar_moeda_br(val_10)})</b> no fechamento / medição final através de emissão de Nota Fiscal Eletrônica e pagamento via Boleto Bancário.
-        """
-        elements.append(Paragraph(pag_texto, style_body))
+        elements.append(Paragraph("<br/>".join(pag_linhas), style_body))
         elements.append(Spacer(1, 4))
 
         # Prazos, Condicionantes e Garantia
-        elements.append(Paragraph("<b>PRAZOS, CONDICIONANTES E GARANTIA</b>", style_section))
-        prazos_tabela_dados = [
-            [
-                Paragraph(f"<b>Prazo de Mobilização:</b> {prazo_mobilizacao}", style_body),
-                Paragraph(f"<b>Prazo de Germinação:</b> {prazo_germinacao}", style_body)
-            ],
-            [
-                Paragraph(f"<b>Prazo de Execução:</b> {prazo_execucao}", style_body),
-                Paragraph(f"<b>Garantia:</b> {garantia_obra}", style_body)
-            ],
-            [
-                Paragraph(f"<b>Irrigação:</b> {irrigacao_resp}", style_body),
-                Paragraph("<b>Documentação:</b> Enviar Cartão CNPJ, Contrato Social, documentos do representante legal e procuração (se aplicável).", style_body)
-            ]
-        ]
-        t_prazos = Table(prazos_tabela_dados, colWidths=[250, 250])
-        t_prazos.setStyle(TableStyle([
-            ("VALIGN", (0, 0), (-1, -1), "TOP"),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
-            ("TOPPADDING", (0, 0), (-1, -1), 2),
-        ]))
-        elements.append(t_prazos)
-        elements.append(Spacer(1, 6))
-
-        # Aviso de Confidencialidade
-        aviso_confidencial = "<font size=6.5><i>Alertamos que o conteúdo da presente Proposta Comercial é CONFIDENCIAL e direcionado única e exclusivamente à empresa acima discriminada, sendo vetada a divulgação, publicação e outros usos desta Proposta Comercial, ou de qualquer parte do seu conteúdo, sem a devida autorização.</i></font>"
-        elements.append(Paragraph(aviso_confidencial, style_body))
-        elements.append(Spacer(1, 6))
-
-        # Bloco de Assinatura
-        bloco_assinatura = [
-            Paragraph(f"Manaus/AM, {datetime.now().strftime('%d de %B de %Y')}.", style_direita),
-            Spacer(1, 10),
-            Paragraph("<b>ASSINADO DIGITALMENTE</b><br/><b>MJ GOMES DE MORAES</b>", style_centro),
-            Paragraph("<font size=6 color=grey>A conformidade com a assinatura pode ser verificada em https://serpro.gov.br/assinador-digital</font>", style_centro),
-            Spacer(1, 5),
-            Paragraph("__________________________________________________<br/><b>AMAZON PAISAGISTICA AMBIENTAL</b><br/>Departamento Comercial / Técnico", style_centro)
-        ]
-        elements.append(KeepTogether(bloco_assinatura))
-
-        # Função de Rodapé por página
-        def add_footer(canvas, doc):
-            canvas.saveState()
-            canvas.setFont('Helvetica', 7)
-            canvas.drawString(25, 12, "AMAZON PAISAGISTICA AMBIENTAL - Proposta Comercial")
-            canvas.drawRightString(595 - 25, 12, f"Página {doc.page} de 1")
-            canvas.restoreState()
-
-        doc.build(elements, onFirstPage=add_footer, onLaterPages=add_footer)
-        buffer.seek(0)
-        return buffer
-
-    col_btn1, col_btn2 = st.columns(2)
-    with col_btn1:
-        pdf_bytes = gerar_pdf()
-        st.download_button(
-            label="📥 Baixar Proposta Comercial em PDF",
-            data=pdf_bytes,
-            file_name=f"Proposta_{num_proposta}_{cliente_nome.replace(' ', '_')}.pdf",
-            mime="application/pdf",
-            use_container_width=True,
-        )
-
-    with col_btn2:
-        if st.button("🚀 Registar Proposta na Planilha", use_container_width=True):
-            data_atual = datetime.now().strftime("%d/%m/%Y")
-            
-            servicos_str = ", ".join([s["Serviço"] for s in st.session_state.proposta])
-            valor_formatado_br = formatar_moeda_br(valor_total)
-            
-            linha_dados = [
-                str(num_proposta),
-                str(cliente_nome),
-                str(cliente_cnpj),
-                str(local_obra),
-                str(servicos_str),
-                valor_formatado_br,
-                "Pendente",
-                data_atual
-            ]
-            
-            sucesso, mensagem = guardar_na_planilha(linha_dados)
-            if sucesso:
-                st.success(mensagem)
-            else:
-                st.error(f"Erro ao guardar na planilha: {mensagem}")
-else:
-    st.warning("Adicione pelo menos um serviço na barra lateral para gerar a proposta.")
+        elements.append(Paragraph("<b>PRAZOS, CONDICIONANTES E GARANTIA
