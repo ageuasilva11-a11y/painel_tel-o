@@ -136,14 +136,6 @@ with st.sidebar:
     local_obra = st.text_input("Local da Obra", "KM 319 - Careiro Castanho/AM")
 
     st.markdown("---")
-    st.header("📊 Status do Orçamento")
-    status_proposta = st.selectbox(
-        "Status Atual", 
-        ["Pendente", "Negociação", "Revisada", "Concretizada"],
-        index=0
-    )
-
-    st.markdown("---")
     st.header("💳 Condições de Pagamento")
     OPCOES_PCT = {
         "30% Entr. / 60% Exec. / 10% Final": (30, 60, 10),
@@ -208,10 +200,10 @@ if st.session_state.proposta:
 
     col1, col2 = st.columns([2, 1])
     with col1:
-        st.subheader(f"Proposta Nº {num_proposta} - {cliente_nome} [{status_proposta}]")
+        st.subheader(f"Proposta Nº {num_proposta} - {cliente_nome}")
         st.dataframe(df, use_container_width=True)
     with col2:
-        st.info(f"**Local da Obra:** {local_obra}\n\n**Status:** {status_proposta}")
+        st.info(f"**Local da Obra:** {local_obra}")
         resumo_pagamento = f"• **{pct_sinal}% Sinal:** {formatar_moeda_br(val_sinal)}"
         if pct_exec > 0:
             resumo_pagamento += f"\n• **{pct_exec}% Execução:** {formatar_moeda_br(val_exec)}"
@@ -382,6 +374,7 @@ if st.session_state.proposta:
             servicos_str = ", ".join([s["Serviço"] for s in st.session_state.proposta])
             valor_formatado_br = formatar_moeda_br(valor_total)
             
+            # Entra na planilha como "Pendente" por padrão
             linha_dados = [
                 str(num_proposta),
                 str(cliente_nome),
@@ -389,7 +382,7 @@ if st.session_state.proposta:
                 str(local_obra),
                 str(servicos_str),
                 valor_formatado_br,
-                str(status_proposta),  # Status selecionado
+                "Pendente",
                 data_atual
             ]
             
