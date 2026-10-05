@@ -51,7 +51,7 @@ st.set_page_config(
 
 st.title("📄 Gerador de Proposta Comercial e Registo Automático")
 st.markdown(
-    "Ajuste os dados do cliente, obra e serviços para gerar a proposta em PDF exatamente no modelo oficial e gravá-la no Google Sheets."
+    "Ajuste os dados do cliente, obra e serviços para gerar a proposta em PDF no modelo oficial e gravá-la no Google Sheets."
 )
 
 PRECOS_PADRAO = {
@@ -164,7 +164,7 @@ if st.session_state.proposta:
     df = pd.DataFrame(st.session_state.proposta)
     valor_total = df["Valor Total (R$)"].sum()
     
-    # Cálculos padrão das parcelas (30%, 60%, 10%)
+    # Condições de pagamento fixas (30%, 60%, 10%)
     val_30 = valor_total * 0.30
     val_60 = valor_total * 0.60
     val_10 = valor_total * 0.10
@@ -191,7 +191,7 @@ if st.session_state.proposta:
         style_direita = ParagraphStyle("DireitaStyle", parent=styles["Normal"], fontSize=7.5, leading=9.5, alignment=2)
         style_centro = ParagraphStyle("CentroStyle", parent=styles["Normal"], fontSize=7.5, leading=9.5, alignment=1)
 
-        # Cabeçalho Oficial idêntico ao modelo
+        # Cabeçalho Oficial
         logo_path = resolve_path("AMAZON.jpg")
         texto_cabecalho = [
             Paragraph("<b>AMAZON HIDROSSEMEADURA</b>", style_title),
@@ -262,7 +262,7 @@ if st.session_state.proposta:
         elements.append(Paragraph(etapas_texto, style_body))
         elements.append(Spacer(1, 4))
 
-        # Condições de Pagamento
+        # Condições de Pagamento (Fixas: 30%, 60%, 10%)
         elements.append(Paragraph("<b>CONDIÇÕES DE PAGAMENTO E VALORES</b>", style_section))
         pag_texto = f"""
         <b>VALOR TOTAL DA PROPOSTA:</b> {formatar_moeda_br(valor_total)}.<br/>
