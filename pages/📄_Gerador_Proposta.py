@@ -30,7 +30,6 @@ def resolve_path(path):
 
 # --- FUNÇÃO DE FORMATAÇÃO MONETÁRIA BRASILEIRA ---
 def formatar_moeda_br(valor):
-    """Formata um float para o padrão brasileiro: R$ 23.500,00"""
     str_val = f"{valor:,.2f}"
     str_val = str_val.replace(",", "X").replace(".", ",").replace("X", ".")
     return f"R$ {str_val}"
@@ -38,7 +37,6 @@ def formatar_moeda_br(valor):
 
 # --- FUNÇÃO DE FORMATAÇÃO DE NÚMEROS (ÁREA) ---
 def formatar_numero_br(valor):
-    """Formata quantidade para o padrão brasileiro: 1.000,00"""
     str_val = f"{valor:,.2f}"
     str_val = str_val.replace(",", "X").replace(".", ",").replace("X", ".")
     return str_val
@@ -125,13 +123,25 @@ def guardar_na_planilha(dados_proposta):
 # --- PAINEL LATERAL ---
 with st.sidebar:
     st.header("🏢 Dados do Cliente e Obra")
-    num_proposta = st.text_input("Nº da Proposta", "0028092026-LCM")
+    
+    # Numeração automática baseada na data do dia (ex: 05102026)
+    num_proposta_padrao = datetime.now().strftime("%d%m%Y")
+    num_proposta = st.text_input("Nº da Proposta", num_proposta_padrao)
+    
     cliente_nome = st.text_input("Empresa Contratante", "LCM Construção e Comércio S.A.")
     cliente_cnpj = st.text_input("CNPJ Cliente", "19.758.842/0023-40")
     cliente_atencao = st.text_input("A/C (Atenção)", "Jacqueline Carvalho (Equipe de Compras)")
     cliente_email = st.text_input("E-mail Cliente", "jacqueline.carvalho@lcmconstrucao.com.br")
     cliente_fone = st.text_input("Telefone Cliente", "(92) 3085-5885")
     local_obra = st.text_input("Local da Obra", "KM 319 - Careiro Castanho/AM")
+
+    st.markdown("---")
+    st.header("📊 Status do Orçamento")
+    status_proposta = st.selectbox(
+        "Status Atual", 
+        ["Pendente", "Negociação", "Revisada", "Concretizada"],
+        index=0
+    )
 
     st.markdown("---")
     st.header("💳 Condições de Pagamento")
@@ -198,10 +208,10 @@ if st.session_state.proposta:
 
     col1, col2 = st.columns([2, 1])
     with col1:
-        st.subheader(f"Proposta Nº {num_proposta} - {cliente_nome}")
+        st.subheader(f"Proposta Nº {num_proposta} - {cliente_nome} [{status_proposta}]")
         st.dataframe(df, use_container_width=True)
     with col2:
-        st.info(f"**Local da Obra:** {local_obra}")
+        st.info(f"**Local da Obra:** {local_obra}\n\n**Status:** {status_proposta}")
         resumo_pagamento = f"• **{pct_sinal}% Sinal:** {formatar_moeda_br(val_sinal)}"
         if pct_exec > 0:
             resumo_pagamento += f"\n• **{pct_exec}% Execução:** {formatar_moeda_br(val_exec)}"
@@ -226,7 +236,6 @@ if st.session_state.proposta:
         style_direita = ParagraphStyle("DireitaStyle", parent=styles["Normal"], fontSize=7.5, leading=9.5, alignment=2)
         style_centro = ParagraphStyle("CentroStyle", parent=styles["Normal"], fontSize=7.5, leading=9.5, alignment=1)
 
-        # Cabeçalho Centralizado Completo
         elements.append(Paragraph("<b>AMAZON</b>", style_header_main))
         elements.append(Paragraph("<b>HIDROSSEMEADURA</b>", style_title))
         elements.append(Spacer(1, 2))
@@ -251,7 +260,6 @@ if st.session_state.proposta:
 
         elements.append(Paragraph("<b>RESUMO FINAL / COMPOSIÇÃO DOS SERVIÇOS</b>", style_section))
         
-        # Cabeçalho da Tabela com Paragraphs para garantir alinhamento perfeito
         table_data = [[
             Paragraph("<b>Item</b>", style_body),
             Paragraph("<b>Descrição dos Serviços</b>", style_body),
@@ -263,7 +271,7 @@ if st.session_state.proposta:
         for row in st.session_state.proposta:
             table_data.append([
                 Paragraph(str(row["Item"]), style_table_cell),
-                Paragraph(row["Serviço"], style_table_cell),  # Agora com quebra de linha automática
+                Paragraph(row["Serviço"], style_table_cell),
                 Paragraph(formatar_numero_br(row["Quantidade (m²)"]), style_table_right),
                 Paragraph(formatar_moeda_br(row["Preço Unitário (R$)"]), style_table_right),
                 Paragraph(formatar_moeda_br(row["Valor Total (R$)"]), style_table_right)
@@ -277,7 +285,6 @@ if st.session_state.proposta:
             Paragraph(f"<b>{formatar_moeda_br(valor_total)}</b>", style_table_right)
         ])
 
-        # Larguras ajustadas para distribuição ideal (~545 pt)
         t = Table(table_data, colWidths=[30, 265, 75, 80, 95])
         t.setStyle(TableStyle([
             ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#004d00")),
@@ -382,7 +389,7 @@ if st.session_state.proposta:
                 str(local_obra),
                 str(servicos_str),
                 valor_formatado_br,
-                "Pendente",
+                str(status_proposta),  # Status selecionado
                 data_atual
             ]
             
