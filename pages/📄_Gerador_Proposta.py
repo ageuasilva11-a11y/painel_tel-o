@@ -182,7 +182,6 @@ if st.session_state.proposta:
     df = pd.DataFrame(st.session_state.proposta)
     valor_total = df["Valor Total (R$)"].sum()
     
-    # Cálculos dinâmicos baseados na seleção da barra lateral
     val_sinal = (valor_total * pct_sinal) / 100
     val_exec = (valor_total * pct_exec) / 100
     val_final = (valor_total * pct_final) / 100 if pct_final > 0 else 0
@@ -214,7 +213,6 @@ if st.session_state.proposta:
         style_direita = ParagraphStyle("DireitaStyle", parent=styles["Normal"], fontSize=7.5, leading=9.5, alignment=2)
         style_centro = ParagraphStyle("CentroStyle", parent=styles["Normal"], fontSize=7.5, leading=9.5, alignment=1)
 
-        # Cabeçalho Oficial
         logo_path = resolve_path("AMAZON.jpg")
         texto_cabecalho = [
             Paragraph("<b>AMAZON HIDROSSEMEADURA</b>", style_title),
@@ -232,70 +230,4 @@ if st.session_state.proposta:
                 elements.append(item)
 
         elements.append(Spacer(1, 4))
-        elements.append(Paragraph(f"<b>PROPOSTA COMERCIAL - N° {num_proposta}</b>", style_title))
-        elements.append(Spacer(1, 3))
-
-        # Bloco de Informações do Cliente
-        data_atual_str = datetime.now().strftime("%d de %B de %Y")
-        dados_cliente = f"""
-        <b>Cliente:</b> {cliente_nome}<br/>
-        <b>CNPJ:</b> {cliente_cnpj}<br/>
-        <b>Att.:</b> {cliente_atencao}<br/>
-        <b>Local da Obra:</b> {local_obra}<br/>
-        <b>Data:</b> {data_atual_str}<br/>
-        <b>E-mail:</b> {cliente_email}
-        """
-        elements.append(Paragraph(dados_cliente, style_body))
-        elements.append(Spacer(1, 4))
-
-        # Tabela de Serviços
-        elements.append(Paragraph("<b>RESUMO FINAL / COMPOSIÇÃO DOS SERVIÇOS</b>", style_section))
-        table_data = [["Item", "Descrição dos Serviços", "Área (m²)", "Vlr. Unit. (R$)", "Total (R$)"]]
-        for row in st.session_state.proposta:
-            table_data.append([
-                str(row["Item"]),
-                row["Serviço"],
-                formatar_numero_br(row["Quantidade (m²)"]),
-                formatar_moeda_br(row["Preço Unitário (R$)"]),
-                formatar_moeda_br(row["Valor Total (R$)"])
-            ])
-        table_data.append(["", "VALOR GLOBAL DA PROPOSTA", "", "", formatar_moeda_br(valor_total)])
-
-        t = Table(table_data, colWidths=[25, 335, 65, 80, 95])
-        t.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#004d00")),
-            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-            ("FONTSIZE", (0, 0), (-1, -1), 7.5),
-            ("ALIGN", (2, 0), (-1, -1), "RIGHT"),
-            ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
-            ("BACKGROUND", (0, -1), (-1, -1), colors.HexColor("#e6ffe6")),
-            ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"),
-        ]))
-        elements.append(t)
-        elements.append(Spacer(1, 4))
-
-        # Etapas de Execução
-        elements.append(Paragraph("<b>ETAPAS DA EXECUÇÃO DOS SERVIÇOS (HIDROSEMEADURA)</b>", style_section))
-        etapas_texto = """
-        1. Preparação / acerto das áreas.<br/>
-        2. Picoteamento / coveamento das áreas.<br/>
-        3. Correção do solo com calcário dolomítico.<br/>
-        4. Hidrojateamento com revestimento vegetal (lançamento de sementes adaptadas para a região).
-        """
-        elements.append(Paragraph(etapas_texto, style_body))
-        elements.append(Spacer(1, 4))
-
-        # Condições de Pagamento Dinâmicas
-        pag_linhas = [f"<b>VALOR TOTAL DA PROPOSTA:</b> {formatar_moeda_br(valor_total)}."]
-        pag_linhas.append(f"• <b>{pct_sinal}% do valor total ({formatar_moeda_br(val_sinal)})</b> na assinatura do contrato para mobilização de funcionários, insumos e equipamentos. (via PIX - CNPJ: 44.246.097/0001-92 - MJ GOMES DE MORAES).")
-        if pct_exec > 0:
-            pag_linhas.append(f"• <b>{pct_exec}% do valor total ({formatar_moeda_br(val_exec)})</b> na aplicação dos serviços através de emissão de Nota Fiscal Eletrônica e pagamento via Boleto Bancário.")
-        if pct_final > 0:
-            pag_linhas.append(f"• <b>{pct_final}% do valor total ({formatar_moeda_br(val_final)})</b> no fechamento / medição final através de emissão de Nota Fiscal Eletrônica e pagamento via Boleto Bancário.")
-
-        elements.append(Paragraph("<b>CONDIÇÕES DE PAGAMENTO E VALORES</b>", style_section))
-        elements.append(Paragraph("<br/>".join(pag_linhas), style_body))
-        elements.append(Spacer(1, 4))
-
-        # Prazos, Condicionantes e Garantia
-        elements.append(Paragraph("<b>PRAZOS, CONDICIONANTES E GARANTIA
+        elements.append(Paragraph(f"
