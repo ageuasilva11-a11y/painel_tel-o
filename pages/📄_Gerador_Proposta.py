@@ -11,7 +11,6 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import inch
 from reportlab.platypus import (
-    Image,
     KeepTogether,
     Paragraph,
     SimpleDocTemplate,
@@ -206,6 +205,7 @@ if st.session_state.proposta:
         styles = getSampleStyleSheet()
 
         style_title = ParagraphStyle("TitleStyle", parent=styles["Heading1"], fontSize=10, leading=12, alignment=1, textColor=colors.HexColor("#004d00"))
+        style_header_main = ParagraphStyle("HeaderMain", parent=styles["Heading1"], fontSize=12, leading=14, alignment=1, textColor=colors.HexColor("#004d00"))
         style_header_sub = ParagraphStyle("HeaderSub", parent=styles["Normal"], fontSize=7.5, leading=9.5, alignment=1)
         style_section = ParagraphStyle("SecStyle", parent=styles["Heading2"], fontSize=8.5, leading=10.5, textColor=colors.HexColor("#004d00"), spaceBefore=5, spaceAfter=2)
         style_body = ParagraphStyle("BodyStyle", parent=styles["Normal"], fontSize=7.5, leading=9.5)
@@ -213,23 +213,14 @@ if st.session_state.proposta:
         style_direita = ParagraphStyle("DireitaStyle", parent=styles["Normal"], fontSize=7.5, leading=9.5, alignment=2)
         style_centro = ParagraphStyle("CentroStyle", parent=styles["Normal"], fontSize=7.5, leading=9.5, alignment=1)
 
-        logo_path = resolve_path("AMAZON.jpg")
-        texto_cabecalho = [
-            Paragraph("<b>AMAZON HIDROSSEMEADURA</b>", style_title),
-            Paragraph("<b>AMAZON PAISAGISTICA AMBIENTAL</b>", style_bold),
-            Paragraph("CNPJ n. 44.246.097/0001-92 | Insc. Municipal: 52393501<br/>Rua Patrai, 385-SI 04-Nova Cidade | CEP: 69.097-305 - Manaus/AM<br/>Fone: +55 92 3085-5885 | 99190-6445 | e-mail: amazonpaisagistica@gmail.com", style_header_sub),
-        ]
+        # Cabeçalho Centralizado Sem Logo (Exatamente como na segunda foto)
+        elements.append(Paragraph("<b>AMAZON</b>", style_header_main))
+        elements.append(Paragraph("<b>HIDROSSEMEADURA</b>", style_title))
+        elements.append(Spacer(1, 2))
+        elements.append(Paragraph("<b>AMAZON PAISAGISTICA AMBIENTAL</b>", style_bold))
+        elements.append(Paragraph("CNPJ n. 44.246.097/0001-92 | Insc. Municipal: 52393501<br/>Rua Patrai, 385 - SI 04 - Nova Cidade | CEP: 69.097-305 - Manaus/AM<br/>Fone: +55 92 3085-5885 | 99190-6445 | e-mail: amazonpaisagistica@gmail.com", style_header_sub))
 
-        if os.path.exists(logo_path):
-            logo_img = Image(logo_path, width=0.9 * inch, height=0.9 * inch)
-            tbl_header = Table([[logo_img, texto_cabecalho]], colWidths=[1.0 * inch, 6.5 * inch])
-            tbl_header.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("ALIGN", (0, 0), (0, 0), "CENTER")]))
-            elements.append(tbl_header)
-        else:
-            for item in texto_cabecalho:
-                elements.append(item)
-
-        elements.append(Spacer(1, 4))
+        elements.append(Spacer(1, 6))
         elements.append(Paragraph(f"<b>PROPOSTA COMERCIAL - N° {num_proposta}</b>", style_title))
         elements.append(Spacer(1, 3))
 
@@ -290,89 +281,3 @@ if st.session_state.proposta:
         elements.append(Paragraph("<b>CONDIÇÕES DE PAGAMENTO E VALORES</b>", style_section))
         elements.append(Paragraph("<br/>".join(pag_linhas), style_body))
         elements.append(Spacer(1, 4))
-
-        elements.append(Paragraph("<b>PRAZOS, CONDICIONANTES E GARANTIA</b>", style_section))
-        prazos_tabela_dados = [
-            [
-                Paragraph(f"<b>Prazo de Mobilização:</b> {prazo_mobilizacao}", style_body),
-                Paragraph(f"<b>Prazo de Germinação:</b> {prazo_germinacao}", style_body)
-            ],
-            [
-                Paragraph(f"<b>Prazo de Execução:</b> {prazo_execucao}", style_body),
-                Paragraph(f"<b>Garantia:</b> {garantia_obra}", style_body)
-            ],
-            [
-                Paragraph(f"<b>Irrigação:</b> {irrigacao_resp}", style_body),
-                Paragraph("<b>Documentação:</b> Enviar Cartão CNPJ, Contrato Social, documentos do representante legal e procuração (se aplicável).", style_body)
-            ]
-        ]
-        t_prazos = Table(prazos_tabela_dados, colWidths=[250, 250])
-        t_prazos.setStyle(TableStyle([
-            ("VALIGN", (0, 0), (-1, -1), "TOP"),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
-            ("TOPPADDING", (0, 0), (-1, -1), 2),
-        ]))
-        elements.append(t_prazos)
-        elements.append(Spacer(1, 6))
-
-        aviso_confidencial = "<font size=6.5><i>Alertamos que o conteúdo da presente Proposta Comercial é CONFIDENCIAL e direcionado única e exclusivamente à empresa acima discriminada, sendo vetada a divulgação, publicação e outros usos desta Proposta Comercial, ou de qualquer parte do seu conteúdo, sem a devida autorização.</i></font>"
-        elements.append(Paragraph(aviso_confidencial, style_body))
-        elements.append(Spacer(1, 6))
-
-        bloco_assinatura = [
-            Paragraph(f"Manaus/AM, {datetime.now().strftime('%d de %B de %Y')}.", style_direita),
-            Spacer(1, 10),
-            Paragraph("<b>ASSINADO DIGITALMENTE</b><br/><b>MJ GOMES DE MORAES</b>", style_centro),
-            Paragraph("<font size=6 color=grey>A conformidade com a assinatura pode ser verificada em https://serpro.gov.br/assinador-digital</font>", style_centro),
-            Spacer(1, 5),
-            Paragraph("__________________________________________________<br/><b>AMAZON PAISAGISTICA AMBIENTAL</b><br/>Departamento Comercial / Técnico", style_centro)
-        ]
-        elements.append(KeepTogether(bloco_assinatura))
-
-        def add_footer(canvas, doc):
-            canvas.saveState()
-            canvas.setFont('Helvetica', 7)
-            canvas.drawString(25, 12, "AMAZON PAISAGISTICA AMBIENTAL - Proposta Comercial")
-            canvas.drawRightString(595 - 25, 12, f"Página {doc.page} de 1")
-            canvas.restoreState()
-
-        doc.build(elements, onFirstPage=add_footer, onLaterPages=add_footer)
-        buffer.seek(0)
-        return buffer
-
-    col_btn1, col_btn2 = st.columns(2)
-    with col_btn1:
-        pdf_bytes = gerar_pdf()
-        st.download_button(
-            label="📥 Baixar Proposta Comercial em PDF",
-            data=pdf_bytes,
-            file_name=f"Proposta_{num_proposta}_{cliente_nome.replace(' ', '_')}.pdf",
-            mime="application/pdf",
-            use_container_width=True,
-        )
-
-    with col_btn2:
-        if st.button("🚀 Registar Proposta na Planilha", use_container_width=True):
-            data_atual = datetime.now().strftime("%d/%m/%Y")
-            
-            servicos_str = ", ".join([s["Serviço"] for s in st.session_state.proposta])
-            valor_formatado_br = formatar_moeda_br(valor_total)
-            
-            linha_dados = [
-                str(num_proposta),
-                str(cliente_nome),
-                str(cliente_cnpj),
-                str(local_obra),
-                str(servicos_str),
-                valor_formatado_br,
-                "Pendente",
-                data_atual
-            ]
-            
-            sucesso, mensagem = guardar_na_planilha(linha_dados)
-            if sucesso:
-                st.success(mensagem)
-            else:
-                st.error(f"Erro ao guardar na planilha: {mensagem}")
-else:
-    st.warning("Adicione pelo menos um serviço na barra lateral para gerar a proposta.")
