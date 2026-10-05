@@ -1,12 +1,12 @@
+import os
 import pandas as pd
 import gspread
 from google.oauth2.service_account import Credentials
 import streamlit as st
-import os
 
-st.set_page_config(page_title="Telão de Orçamentos", page_icon="📊", layout="wide")
+st.set_page_config(page_title="Painel de Orçamentos", page_icon="📊", layout="wide")
 
-st.title("📊 Telão - Gestão de Orçamentos Registados")
+st.title("📊 Painel de Gestão e Acompanhamento de Orçamentos")
 
 # --- CONEXÃO AO GOOGLE SHEETS ---
 def obter_conexao_sheets():
@@ -42,12 +42,43 @@ try:
     dados = worksheet.get_all_records()
     if dados:
         df = pd.DataFrame(dados)
-        st.subheader("Todos os Orçamentos Registados")
-        
-        # Exibição interativa com edição de status se desejar
+
+        st.subheader("📋 Tabela do Telão")
         st.dataframe(df, use_container_width=True)
+
+        st.markdown("---")
+        st.subheader("⚙️ Alterar Status de uma Proposta")
+
+        col1, col2, col3 = st.columns([2, 2, 1])
+        
+        # Lista de propostas para escolher qual alterar
+        lista_propostas = df["Nº Orçamento"].astype(str).tolist() if "Nº Orçamento" in df.columns else []
+        
+        with col1:
+            prop_selecionada = st.selectbox("Selecione o Nº do Orçamento", lista_propostas)
+        
+        with col2:
+            novo_status = st.selectbox("Novo Status", ["Pendente", "Negociação", "Revisada", "Concretizada"])
+
+        with col3:
+            st.write(" ")
+            st.write(" ")
+            if st.button("🔄 Atualizar Status", use_container_width=True):
+                # Encontra a linha no Google Sheets e atualiza a coluna de Status
+                try:
+                    cell = worksheet.find(prop_selecionada)
+                    if cell:
+                        # Descobre qual a coluna do "Status" (normalmente G / Coluna 7)
+                        col_status = df.columns.get_loc("Status") + 1 if "Status" in df.columns else 7
+                        worksheet.update_cell(cell.row, col_status, novo_status)
+                        st.success(f"Status do Orçamento {prop_selecionada} atualizado para '{novo_status}'!")
+                        st.rerun()
+                    else:
+                        st.error("Orçamento não encontrado na planilha.")
+                except Exception as ex:
+                    st.error(f"Erro ao atualizar status: {ex}")
     else:
-        st.info("Ainda não existem orçamentos registados na planilha.")
+        st.info("Nenhum orçamento encontrado na planilha.")
 
 except Exception as e:
-    st.error(f"Erro ao carregar os dados do Google Sheets: {e}")
+    st.error(f"Erro ao ligar à planilha do Google Sheets: {e}")
