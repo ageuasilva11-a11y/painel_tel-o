@@ -6,7 +6,7 @@ import streamlit as st
 
 st.set_page_config(page_title="Painel de Orçamentos", page_icon="📊", layout="wide")
 
-st.title("📊 Telão - Acompanhamento de Orçamentos")
+st.title("📊 Painel de Gestão e Acompanhamento de Orçamentos")
 
 
 def obter_conexao_sheets():
@@ -44,12 +44,10 @@ try:
     if dados:
         df = pd.DataFrame(dados)
 
-        # Garantir coluna de Status padronizada
         col_status_nome = "Status" if "Status" in df.columns else df.columns[6]
 
-        # Filtragem das duas tabelas
-        df_concretizados = df[df[col_status_nome].str.strip().str.lower() == "concretizada"]
-        df_em_andamento = df[df[col_status_nome].str.strip().str.lower() != "concretizada"]
+        df_concretizados = df[df[col_status_nome].astype(str).str.strip().str.lower() == "concretizada"]
+        df_em_andamento = df[df[col_status_nome].astype(str).str.strip().str.lower() != "concretizada"]
 
         # --- TABELA 1: EM ACOMPANHAMENTO ---
         st.subheader("⏳ Orçamentos em Acompanhamento (Pendente / Negociação / Revisada)")
@@ -75,20 +73,37 @@ try:
         col1, col2, col3 = st.columns([2, 2, 1])
         
         col_orcamento = "Nº Orçamento" if "Nº Orçamento" in df.columns else df.columns[0]
-        lista_propostas = [str(val) for val in df[col_orcamento].tolist()]
-        
+        lista_propostas = [str(val).strip() for val in df[col_orcamento].tolist()]
+        opcoes_status = ["Pendente", "Negociação", "Revisada", "Concretizada"]
+
         with col1:
             prop_selecionada = st.selectbox("Selecione o Nº do Orçamento", lista_propostas)
-        
+
+        # Identifica o status atual do orçamento selecionado na planilha
+        idx_selecionado = lista_propostas.index(prop_selecionada)
+        status_atual_planilha = str(df.iloc[idx_selecionado][col_status_nome]).strip()
+
+        # Encontra o índice correspondente nas opções de status (padrão 0 = Pendente)
+        idx_status_padrao = 0
+        for i, opt in enumerate(opcoes_status):
+            if opt.lower() == status_atual_planilha.lower():
+                idx_status_padrao = i
+                break
+
         with col2:
-            novo_status = st.selectbox("Novo Status", ["Pendente", "Negociação", "Revisada", "Concretizada"])
+            novo_status = st.selectbox(
+                "Novo Status", 
+                opcoes_status, 
+                index=idx_status_padrao,
+                key=f"status_select_{prop_selecionada}"
+            )
 
         with col3:
             st.write(" ")
             st.write(" ")
             if st.button("🔄 Atualizar Status", use_container_width=True):
                 try:
-                    idx_linha = lista_propostas.index(prop_selecionada) + 2
+                    idx_linha = idx_selecionado + 2
                     col_status_idx = df.columns.get_loc(col_status_nome) + 1
                     
                     worksheet.update_cell(idx_linha, col_status_idx, novo_status)
