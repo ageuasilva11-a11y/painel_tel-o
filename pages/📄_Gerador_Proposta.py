@@ -9,7 +9,6 @@ from google.oauth2.service_account import Credentials
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
-from reportlab.lib.units import inch
 from reportlab.platypus import (
     KeepTogether,
     Paragraph,
@@ -21,28 +20,24 @@ from reportlab.platypus import (
 import streamlit as st
 
 
-# --- FUNÇÃO DE RESOLUÇÃO DE CAMINHO ---
 def resolve_path(path):
     if hasattr(sys, "_MEIPASS"):
         return os.path.join(sys._MEIPASS, path)
     return os.path.join(os.path.abspath("."), path)
 
 
-# --- FUNÇÃO DE FORMATAÇÃO MONETÁRIA BRASILEIRA ---
 def formatar_moeda_br(valor):
     str_val = f"{valor:,.2f}"
     str_val = str_val.replace(",", "X").replace(".", ",").replace("X", ".")
     return f"R$ {str_val}"
 
 
-# --- FUNÇÃO DE FORMATAÇÃO DE NÚMEROS (ÁREA) ---
 def formatar_numero_br(valor):
     str_val = f"{valor:,.2f}"
     str_val = str_val.replace(",", "X").replace(".", ",").replace("X", ".")
     return str_val
 
 
-# --- FUNÇÃO DE DATA EM PORTUGUÊS ---
 def obter_data_pt():
     meses = {
         1: "janeiro", 2: "fevereiro", 3: "março", 4: "abril",
@@ -79,6 +74,7 @@ if "proposta" not in st.session_state:
         },
     ]
 
+
 # --- CONEXÃO AO GOOGLE SHEETS ---
 def obter_conexao_sheets():
     scopes = [
@@ -97,6 +93,47 @@ def obter_conexao_sheets():
         creds = Credentials.from_service_account_file("service_account.json", scopes=scopes)
         return gspread.authorize(creds)
     return None
+
+
+def obter_proximo_numero_proposta():
+    """Lê a planilha para identificar o próximo número sequencial mantendo o incremento global e a data do dia corrente."""
+    data_hoje_str = datetime.now().strftime("%d%m%y")  # Ex: 051026
+    
+    try:
+        client = obter_conexao_sheets()
+        if client:
+            nome_planilha = "Orcamentos"
+            if "google_sheets" in st.secrets and "planilha_nome" in st.secrets["google_sheets"]:
+                nome_planilha = st.secrets["google_sheets"]["planilha_nome"]
+
+            sheet = client.open(nome_planilha)
+            try:
+                worksheet = sheet.worksheet("Orcamentos")
+            except Exception:
+                worksheet = sheet.get_worksheet(0)
+
+            col_valores = worksheet.col_values(1)  # Primeira coluna: Nº Orçamento
+            
+            maior_seq = 0
+            for item in col_valores[1:]:  # Pula o cabeçalho
+                item_clean = str(item).strip()
+                # Procura por valores que iniciam com 3 dígitos sequenciais
+                if len(item_clean) >= 3 and item_clean[:3].isdigit():
+                    seq = int(item_clean[:3])
+                    if seq > maior_seq:
+                        maior_seq = seq
+            
+            if maior_seq > 0:
+                proximo_seq = maior_seq + 1
+            else:
+                proximo_seq = 36  # Valor padrão inicial se não houver registros anteriores
+                
+            return f"{proximo_seq:03d}{data_hoje_str}"
+    except Exception:
+        pass
+    
+    return f"036{data_hoje_str}"
+
 
 def guardar_na_planilha(dados_proposta):
     try:
@@ -124,9 +161,9 @@ def guardar_na_planilha(dados_proposta):
 with st.sidebar:
     st.header("🏢 Dados do Cliente e Obra")
     
-    # Numeração automática baseada na data do dia (ex: 05102026)
-    num_proposta_padrao = datetime.now().strftime("%d%m%Y")
-    num_proposta = st.text_input("Nº da Proposta", num_proposta_padrao)
+    # Gera o número automático no formato XXXDDMMYY (ex: 036051026)
+    num_proposta_auto = obter_proximo_numero_proposta()
+    num_proposta = st.text_input("Nº da Proposta", num_proposta_auto)
     
     cliente_nome = st.text_input("Empresa Contratante", "LCM Construção e Comércio S.A.")
     cliente_cnpj = st.text_input("CNPJ Cliente", "19.758.842/0023-40")
@@ -374,7 +411,6 @@ if st.session_state.proposta:
             servicos_str = ", ".join([s["Serviço"] for s in st.session_state.proposta])
             valor_formatado_br = formatar_moeda_br(valor_total)
             
-            # Entra na planilha como "Pendente" por padrão
             linha_dados = [
                 str(num_proposta),
                 str(cliente_nome),
