@@ -29,6 +29,22 @@ def resolve_path(path):
     return os.path.join(os.path.abspath("."), path)
 
 
+# --- FUNÇÃO DE FORMATAÇÃO MONETÁRIA BRASILEIRA ---
+def formatar_moeda_br(valor):
+    """Formata um float para o padrão brasileiro: R$ 23.500,00"""
+    str_val = f"{valor:,.2f}"
+    str_val = str_val.replace(",", "X").replace(".", ",").replace("X", ".")
+    return f"R$ {str_val}"
+
+
+# --- FUNÇÃO DE FORMATAÇÃO DE NÚMEROS (ÁREA) ---
+def formatar_numero_br(valor):
+    """Formata quantidade para o padrão brasileiro: 1.000,00"""
+    str_val = f"{valor:,.2f}"
+    str_val = str_val.replace(",", "X").replace(".", ",").replace("X", ".")
+    return str_val
+
+
 st.set_page_config(
     page_title="Gerador de Proposta Comercial", page_icon="📄", layout="wide"
 )
@@ -186,7 +202,7 @@ if st.session_state.proposta:
         st.dataframe(df, use_container_width=True)
     with col2:
         st.info(f"**Endereço:** {cliente_endereco}\n\n**Local da Obra:** {local_obra}")
-        st.success(f"**Valor Total:** R$ {valor_total:,.2f}\n\n• **Entrada ({pct_sinal}%):** R$ {val_sinal:,.2f}\n• **Saldo ({pct_saldo}%):** R$ {val_saldo:,.2f}")
+        st.success(f"**Valor Total:** {formatar_moeda_br(valor_total)}\n\n• **Entrada ({pct_sinal}%):** {formatar_moeda_br(val_sinal)}\n• **Saldo ({pct_saldo}%):** {formatar_moeda_br(val_saldo)}")
 
     def gerar_pdf():
         buffer = io.BytesIO()
@@ -198,7 +214,6 @@ if st.session_state.proposta:
         style_header = ParagraphStyle("HeaderStyle", parent=styles["Normal"], fontSize=8, leading=10, alignment=1)
         style_section = ParagraphStyle("SecStyle", parent=styles["Heading2"], fontSize=9, leading=11, textColor=colors.HexColor("#004d00"), spaceBefore=6, spaceAfter=3)
         style_body = ParagraphStyle("BodyStyle", parent=styles["Normal"], fontSize=7.5, leading=9.5)
-        style_alert = ParagraphStyle("AlertStyle", parent=styles["Normal"], fontSize=7, leading=9, textColor=colors.HexColor("#333333"), alignment=4)
         style_direita = ParagraphStyle("DireitaStyle", parent=styles["Normal"], fontSize=8, leading=10, alignment=2)
         style_centro = ParagraphStyle("CentroStyle", parent=styles["Normal"], fontSize=8, leading=10, alignment=1)
 
@@ -228,8 +243,14 @@ if st.session_state.proposta:
         elements.append(Paragraph("<b>RESUMO FINAL / COMPOSIÇÃO DOS SERVIÇOS</b>", style_section))
         table_data = [["Item", "Descrição dos Serviços", "Área (m²)", "Vlr. Unit. (R$)", "Total (R$)"]]
         for row in st.session_state.proposta:
-            table_data.append([str(row["Item"]), row["Serviço"], f"{row['Quantidade (m²)']:,.2f}", f"R$ {row['Preço Unitário (R$)']:,.2f}", f"R$ {row['Valor Total (R$)']:,.2f}"])
-        table_data.append(["", "VALOR GLOBAL DA PROPOSTA", "", "", f"R$ {valor_total:,.2f}"])
+            table_data.append([
+                str(row["Item"]),
+                row["Serviço"],
+                formatar_numero_br(row["Quantidade (m²)"]),
+                formatar_moeda_br(row["Preço Unitário (R$)"]),
+                formatar_moeda_br(row["Valor Total (R$)"])
+            ])
+        table_data.append(["", "VALOR GLOBAL DA PROPOSTA", "", "", formatar_moeda_br(valor_total)])
 
         t = Table(table_data, colWidths=[30, 240, 75, 85, 90])
         t.setStyle(TableStyle([
@@ -244,7 +265,7 @@ if st.session_state.proposta:
         elements.append(t)
         elements.append(Spacer(1, 6))
 
-        condicoes_texto = f"<b>VALOR TOTAL:</b> R$ {valor_total:,.2f}<br/><b>PAGAMENTO:</b> {pct_sinal}% entrada ({forma_sinal}) e {pct_saldo}% saldo ({forma_saldo}).<br/><b>MOBILIZAÇÃO:</b> {prazo_mobilizacao}.<br/><b>EXECUÇÃO:</b> {prazo_execucao}."
+        condicoes_texto = f"<b>VALOR TOTAL:</b> {formatar_moeda_br(valor_total)}<br/><b>PAGAMENTO:</b> {pct_sinal}% entrada ({forma_sinal}) e {pct_saldo}% saldo ({forma_saldo}).<br/><b>MOBILIZAÇÃO:</b> {prazo_mobilizacao}.<br/><b>EXECUÇÃO:</b> {prazo_execucao}."
         elements.append(Paragraph(condicoes_texto, style_body))
         elements.append(Spacer(1, 10))
 
@@ -273,17 +294,30 @@ if st.session_state.proposta:
     with col_btn2:
         if st.button("🚀 Registar Proposta na Planilha", use_container_width=True):
             data_atual = datetime.now().strftime("%d/%m/%Y")
+            
+            # Junta os serviços incluídos para preencher a coluna correspondente
+            servicos_str = ", ".join([s["Serviço"] for s in st.session_state.proposta])
+            
+            # Formata valor total no padrão brasileiro (R$ 23.500,00)
+            valor_formatado_br = formatar_moeda_br(valor_total)
+            
+            # Ordem exata de colunas correspondente à planilha (A até H):
+            # A: Nº Orçamento | B: Cliente | C: CNPJ | D: Serviço | E: Local da Obra | F: Valor (R$) | G: Status | H: Data
             linha_dados = [
                 str(num_proposta),
                 str(cliente_nome),
                 str(cliente_cnpj),
+                str(servicos_str),
                 str(local_obra),
-                f"R$ {valor_total:,.2f}",
+                valor_formatado_br,
                 "Pendente",
                 data_atual
             ]
+            
             sucesso, mensagem = guardar_na_planilha(linha_dados)
             if sucesso:
                 st.success(mensagem)
             else:
                 st.error(f"Erro ao guardar na planilha: {mensagem}")
+else:
+    st.warning("Adicione pelo menos um serviço na barra lateral para gerar a proposta.")
