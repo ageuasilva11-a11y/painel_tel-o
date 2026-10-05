@@ -1,0 +1,289 @@
+from datetime import datetime
+import io
+import os
+import sys
+
+import pandas as pd
+import gspread
+from google.oauth2.service_account import Credentials
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+from reportlab.lib.units import inch
+from reportlab.platypus import (
+    Image,
+    KeepTogether,
+    Paragraph,
+    SimpleDocTemplate,
+    Spacer,
+    Table,
+    TableStyle,
+)
+import streamlit as st
+
+
+# --- FUNÇÃO DE RESOLUÇÃO DE CAMINHO ---
+def resolve_path(path):
+    if hasattr(sys, "_MEIPASS"):
+        return os.path.join(sys._MEIPASS, path)
+    return os.path.join(os.path.abspath("."), path)
+
+
+st.set_page_config(
+    page_title="Gerador de Proposta Comercial", page_icon="📄", layout="wide"
+)
+
+st.title("📄 Gerador de Proposta Comercial e Registo Automático")
+st.markdown(
+    "Ajuste os dados do cliente, obra e serviços para gerar a proposta em PDF e gravá-la diretamente no Google Sheets."
+)
+
+PRECOS_PADRAO = {
+    "Hidromanta Projetada": 22.00,
+    "Conformação Manual do Relevo (Microcoveamento)": 1.50,
+    "Hidrossemeadura": 6.56,
+}
+
+if "proposta" not in st.session_state:
+    st.session_state.proposta = [
+        {
+            "Item": 1,
+            "Serviço": "Hidromanta Projetada",
+            "Quantidade (m²)": 1000.0,
+            "Preço Unitário (R$)": 22.00,
+            "Valor Total (R$)": 22000.00,
+        },
+        {
+            "Item": 2,
+            "Serviço": "Conformação Manual do Relevo (Microcoveamento)",
+            "Quantidade (m²)": 1000.0,
+            "Preço Unitário (R$)": 1.50,
+            "Valor Total (R$)": 1500.00,
+        },
+    ]
+
+# --- CONEXÃO AO GOOGLE SHEETS ---
+def obter_conexao_sheets():
+    scopes = [
+        "https://www.googleapis.com/auth/spreadsheets",
+        "https://www.googleapis.com/auth/drive"
+    ]
+    if "google_sheets" in st.secrets:
+        creds_dict = dict(st.secrets["google_sheets"])
+        if "private_key" in creds_dict:
+            pk = creds_dict["private_key"]
+            pk = pk.replace("\\n", "\n").replace("\r", "")
+            creds_dict["private_key"] = pk
+        creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
+        return gspread.authorize(creds)
+    elif os.path.exists("service_account.json"):
+        creds = Credentials.from_service_account_file("service_account.json", scopes=scopes)
+        return gspread.authorize(creds)
+    return None
+
+def guardar_na_planilha(dados_proposta):
+    try:
+        client = obter_conexao_sheets()
+        if not client:
+            return False, "Credenciais não encontradas."
+        
+        nome_planilha = "Orcamentos"
+        if "google_sheets" in st.secrets and "planilha_nome" in st.secrets["google_sheets"]:
+            nome_planilha = st.secrets["google_sheets"]["planilha_nome"]
+
+        sheet = client.open(nome_planilha)
+        try:
+            worksheet = sheet.worksheet("Orcamentos")
+        except Exception:
+            worksheet = sheet.get_worksheet(0)
+
+        worksheet.append_row(dados_proposta)
+        return True, "Proposta registada com sucesso na planilha!"
+    except Exception as e:
+        return False, str(e)
+
+
+# --- PAINEL LATERAL ---
+with st.sidebar:
+    st.header("🏢 Dados do Cliente e Obra")
+    num_proposta = st.text_input("Nº da Proposta", "003512082026")
+    cliente_nome = st.text_input("Empresa Contratante", "ORYX CONSTRUÇÕES E LOCAÇÃO")
+    cliente_cnpj = st.text_input("CNPJ Cliente", "23.732.495/0001-49")
+    cliente_atencao = st.text_input("A/C (Atenção)", "Sr.(a). Hugo Arouca")
+    cliente_email = st.text_input("E-mail Cliente", "contato@oryx.com.br")
+    cliente_fone = st.text_input("Telefone Cliente", "(92) 99999-9999")
+    cliente_endereco = st.text_input("Endereço do Cliente", "Av. Djalma Batista, 1000 - Manaus/AM")
+    local_obra = st.text_input("Local da Obra", "Av. Abiurana, 150, Manaus/AM")
+
+    st.markdown("---")
+    st.header("⚙️ Condições Especiais de Escopo")
+    inclui_irrigacao = st.checkbox("Nossa empresa fará a irrigação?", value=False)
+
+    st.markdown("---")
+    st.header("⏱ Prazos de Execução")
+    prazo_mobilizacao = st.text_input("Prazo de Mobilização", "02 dias após assinatura do contrato")
+    prazo_execucao = st.text_input("Prazo de Execução da Obra", "05 a 10 dias úteis")
+
+    st.markdown("---")
+    st.header("💳 Condições de Pagamento")
+    OPCOES_PCT = {
+        "60% Entr. / 40% Final": (60, 40),
+        "50% Entr. / 50% Final": (50, 50),
+        "40% Entr. / 60% Final": (40, 60),
+        "30% Entr. / 70% Final": (30, 70),
+        "20% Entr. / 80% Final": (20, 80),
+        "Personalizado": None,
+    }
+    opcao_porcentagem = st.selectbox("Divisão de Porcentagem", list(OPCOES_PCT.keys()))
+
+    if opcao_porcentagem == "Personalizado":
+        pct_sinal = st.number_input("% de Entrada (Sinal)", min_value=0, max_value=100, value=50)
+        pct_saldo = 100 - pct_sinal
+    else:
+        pct_sinal, pct_saldo = OPCOES_PCT[opcao_porcentagem]
+
+    forma_sinal = st.selectbox("Meio de Pagamento (Entrada)", ["PIX", "Boleto Bancário", "Transferência Bancária", "Dinheiro"], index=0)
+    forma_saldo = st.selectbox("Meio de Pagamento (Saldo Final)", ["Boleto Bancário (5 dias após NF-e)", "Boleto Bancário (15 dias após NF-e)", "PIX na conclusão"], index=0)
+
+    st.markdown("---")
+    st.header("📋 Adicionar Serviço")
+    servico_sel = st.selectbox("Serviço", list(PRECOS_PADRAO.keys()) + ["Outro"])
+    if servico_sel == "Outro":
+        nome_servico = st.text_input("Nome do Serviço")
+        preco_padrao = 0.0
+    else:
+        nome_servico = servico_sel
+        preco_padrao = PRECOS_PADRAO[servico_sel]
+
+    qtd_m2 = st.number_input("Área (m²)", min_value=0.0, value=1000.0, step=100.0)
+    preco_unit = st.number_input("Preço Unitário (R$/m²)", min_value=0.0, value=preco_padrao, step=0.50)
+
+    if st.button("➕ Adicionar Serviço", use_container_width=True):
+        if nome_servico and qtd_m2 > 0 and preco_unit > 0:
+            st.session_state.proposta.append({
+                "Item": len(st.session_state.proposta) + 1,
+                "Serviço": nome_servico,
+                "Quantidade (m²)": qtd_m2,
+                "Preço Unitário (R$)": preco_unit,
+                "Valor Total (R$)": qtd_m2 * preco_unit,
+            })
+            st.rerun()
+
+    if st.button("🗑️ Limpar Tudo", type="secondary", use_container_width=True):
+        st.session_state.proposta = []
+        st.rerun()
+
+# --- CORPO DA PÁGINA ---
+if st.session_state.proposta:
+    df = pd.DataFrame(st.session_state.proposta)
+    valor_total = df["Valor Total (R$)"].sum()
+    val_sinal = (valor_total * pct_sinal) / 100
+    val_saldo = (valor_total * pct_saldo) / 100
+
+    col1, col2 = st.columns([2, 1])
+    with col1:
+        st.subheader(f"Proposta Nº {num_proposta} - {cliente_nome}")
+        st.dataframe(df, use_container_width=True)
+    with col2:
+        st.info(f"**Endereço:** {cliente_endereco}\n\n**Local da Obra:** {local_obra}")
+        st.success(f"**Valor Total:** R$ {valor_total:,.2f}\n\n• **Entrada ({pct_sinal}%):** R$ {val_sinal:,.2f}\n• **Saldo ({pct_saldo}%):** R$ {val_saldo:,.2f}")
+
+    def gerar_pdf():
+        buffer = io.BytesIO()
+        doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=30, leftMargin=30, topMargin=25, bottomMargin=25)
+        elements = []
+        styles = getSampleStyleSheet()
+
+        style_title = ParagraphStyle("TitleStyle", parent=styles["Heading1"], fontSize=11, leading=13, alignment=1, textColor=colors.HexColor("#004d00"))
+        style_header = ParagraphStyle("HeaderStyle", parent=styles["Normal"], fontSize=8, leading=10, alignment=1)
+        style_section = ParagraphStyle("SecStyle", parent=styles["Heading2"], fontSize=9, leading=11, textColor=colors.HexColor("#004d00"), spaceBefore=6, spaceAfter=3)
+        style_body = ParagraphStyle("BodyStyle", parent=styles["Normal"], fontSize=7.5, leading=9.5)
+        style_alert = ParagraphStyle("AlertStyle", parent=styles["Normal"], fontSize=7, leading=9, textColor=colors.HexColor("#333333"), alignment=4)
+        style_direita = ParagraphStyle("DireitaStyle", parent=styles["Normal"], fontSize=8, leading=10, alignment=2)
+        style_centro = ParagraphStyle("CentroStyle", parent=styles["Normal"], fontSize=8, leading=10, alignment=1)
+
+        logo_path = resolve_path("AMAZON.jpg")
+        texto_cabecalho = [
+            Paragraph("<b>AMAZON PAISAGISTICA AMBIENTAL</b>", style_title),
+            Paragraph("CNPJ n. 44.246.097/0001-92 | Manaus/AM<br/>Fone: +55 92 3085-5885 | amazonpaisagistica@gmail.com", style_header),
+        ]
+
+        if os.path.exists(logo_path):
+            logo_img = Image(logo_path, width=1.1 * inch, height=1.1 * inch)
+            tbl_header = Table([[logo_img, texto_cabecalho]], colWidths=[1.2 * inch, 6.0 * inch])
+            tbl_header.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("ALIGN", (0, 0), (0, 0), "CENTER")]))
+            elements.append(tbl_header)
+        else:
+            for item in texto_cabecalho:
+                elements.append(item)
+
+        elements.append(Spacer(1, 6))
+        elements.append(Paragraph(f"<b>PROPOSTA COMERCIAL - Nº {num_proposta}</b>", style_title))
+        elements.append(Spacer(1, 4))
+
+        dados_cliente = f"<b>À</b> {cliente_nome} | <b>CNPJ:</b> {cliente_cnpj}<br/><b>Att.:</b> {cliente_atencao} | <b>E-mail:</b> {cliente_email} | <b>Fone:</b> {cliente_fone}<br/><b>Local da Obra:</b> {local_obra}"
+        elements.append(Paragraph(dados_cliente, style_body))
+        elements.append(Spacer(1, 6))
+
+        elements.append(Paragraph("<b>RESUMO FINAL / COMPOSIÇÃO DOS SERVIÇOS</b>", style_section))
+        table_data = [["Item", "Descrição dos Serviços", "Área (m²)", "Vlr. Unit. (R$)", "Total (R$)"]]
+        for row in st.session_state.proposta:
+            table_data.append([str(row["Item"]), row["Serviço"], f"{row['Quantidade (m²)']:,.2f}", f"R$ {row['Preço Unitário (R$)']:,.2f}", f"R$ {row['Valor Total (R$)']:,.2f}"])
+        table_data.append(["", "VALOR GLOBAL DA PROPOSTA", "", "", f"R$ {valor_total:,.2f}"])
+
+        t = Table(table_data, colWidths=[30, 240, 75, 85, 90])
+        t.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#004d00")),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("FONTSIZE", (0, 0), (-1, -1), 7.5),
+            ("ALIGN", (2, 0), (-1, -1), "RIGHT"),
+            ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+            ("BACKGROUND", (0, -1), (-1, -1), colors.HexColor("#e6ffe6")),
+            ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"),
+        ]))
+        elements.append(t)
+        elements.append(Spacer(1, 6))
+
+        condicoes_texto = f"<b>VALOR TOTAL:</b> R$ {valor_total:,.2f}<br/><b>PAGAMENTO:</b> {pct_sinal}% entrada ({forma_sinal}) e {pct_saldo}% saldo ({forma_saldo}).<br/><b>MOBILIZAÇÃO:</b> {prazo_mobilizacao}.<br/><b>EXECUÇÃO:</b> {prazo_execucao}."
+        elements.append(Paragraph(condicoes_texto, style_body))
+        elements.append(Spacer(1, 10))
+
+        bloco_assinatura = [
+            Paragraph(f"Manaus/AM, {datetime.now().strftime('%d/%m/%Y')}.", style_direita),
+            Spacer(1, 20),
+            Paragraph("__________________________________________________<br/><b>AMAZON PAISAGISTICA AMBIENTAL</b>", style_centro)
+        ]
+        elements.append(KeepTogether(bloco_assinatura))
+
+        doc.build(elements)
+        buffer.seek(0)
+        return buffer
+
+    col_btn1, col_btn2 = st.columns(2)
+    with col_btn1:
+        pdf_bytes = gerar_pdf()
+        st.download_button(
+            label="📥 Baixar Proposta Comercial em PDF",
+            data=pdf_bytes,
+            file_name=f"Proposta_{num_proposta}_{cliente_nome.replace(' ', '_')}.pdf",
+            mime="application/pdf",
+            use_container_width=True,
+        )
+
+    with col_btn2:
+        if st.button("🚀 Registar Proposta na Planilha", use_container_width=True):
+            data_atual = datetime.now().strftime("%d/%m/%Y")
+            linha_dados = [
+                str(num_proposta),
+                str(cliente_nome),
+                str(cliente_cnpj),
+                str(local_obra),
+                f"R$ {valor_total:,.2f}",
+                "Pendente",
+                data_atual
+            ]
+            sucesso, mensagem = guardar_na_planilha(linha_dados)
+            if sucesso:
+                st.success(mensagem)
+            else:
+                st.error(f"Erro ao guardar na planilha: {mensagem}")
