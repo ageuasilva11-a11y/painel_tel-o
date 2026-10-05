@@ -230,4 +230,149 @@ if st.session_state.proposta:
                 elements.append(item)
 
         elements.append(Spacer(1, 4))
-        elements.append(Paragraph(f"
+        elements.append(Paragraph(f"<b>PROPOSTA COMERCIAL - N° {num_proposta}</b>", style_title))
+        elements.append(Spacer(1, 3))
+
+        data_atual_str = datetime.now().strftime("%d de %B de %Y")
+        dados_cliente = f"""
+        <b>Cliente:</b> {cliente_nome}<br/>
+        <b>CNPJ:</b> {cliente_cnpj}<br/>
+        <b>Att.:</b> {cliente_atencao}<br/>
+        <b>Local da Obra:</b> {local_obra}<br/>
+        <b>Data:</b> {data_atual_str}<br/>
+        <b>E-mail:</b> {cliente_email}
+        """
+        elements.append(Paragraph(dados_cliente, style_body))
+        elements.append(Spacer(1, 4))
+
+        elements.append(Paragraph("<b>RESUMO FINAL / COMPOSIÇÃO DOS SERVIÇOS</b>", style_section))
+        table_data = [["Item", "Descrição dos Serviços", "Área (m²)", "Vlr. Unit. (R$)", "Total (R$)"]]
+        for row in st.session_state.proposta:
+            table_data.append([
+                str(row["Item"]),
+                row["Serviço"],
+                formatar_numero_br(row["Quantidade (m²)"]),
+                formatar_moeda_br(row["Preço Unitário (R$)"]),
+                formatar_moeda_br(row["Valor Total (R$)"])
+            ])
+        table_data.append(["", "VALOR GLOBAL DA PROPOSTA", "", "", formatar_moeda_br(valor_total)])
+
+        t = Table(table_data, colWidths=[25, 335, 65, 80, 95])
+        t.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#004d00")),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+            ("FONTSIZE", (0, 0), (-1, -1), 7.5),
+            ("ALIGN", (2, 0), (-1, -1), "RIGHT"),
+            ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+            ("BACKGROUND", (0, -1), (-1, -1), colors.HexColor("#e6ffe6")),
+            ("FONTNAME", (0, -1), (-1, -1), "Helvetica-Bold"),
+        ]))
+        elements.append(t)
+        elements.append(Spacer(1, 4))
+
+        elements.append(Paragraph("<b>ETAPAS DA EXECUÇÃO DOS SERVIÇOS (HIDROSEMEADURA)</b>", style_section))
+        etapas_texto = """
+        1. Preparação / acerto das áreas.<br/>
+        2. Picoteamento / coveamento das áreas.<br/>
+        3. Correção do solo com calcário dolomítico.<br/>
+        4. Hidrojateamento com revestimento vegetal (lançamento de sementes adaptadas para a região).
+        """
+        elements.append(Paragraph(etapas_texto, style_body))
+        elements.append(Spacer(1, 4))
+
+        pag_linhas = [f"<b>VALOR TOTAL DA PROPOSTA:</b> {formatar_moeda_br(valor_total)}."]
+        pag_linhas.append(f"• <b>{pct_sinal}% do valor total ({formatar_moeda_br(val_sinal)})</b> na assinatura do contrato para mobilização de funcionários, insumos e equipamentos. (via PIX - CNPJ: 44.246.097/0001-92 - MJ GOMES DE MORAES).")
+        if pct_exec > 0:
+            pag_linhas.append(f"• <b>{pct_exec}% do valor total ({formatar_moeda_br(val_exec)})</b> na aplicação dos serviços através de emissão de Nota Fiscal Eletrônica e pagamento via Boleto Bancário.")
+        if pct_final > 0:
+            pag_linhas.append(f"• <b>{pct_final}% do valor total ({formatar_moeda_br(val_final)})</b> no fechamento / medição final através de emissão de Nota Fiscal Eletrônica e pagamento via Boleto Bancário.")
+
+        elements.append(Paragraph("<b>CONDIÇÕES DE PAGAMENTO E VALORES</b>", style_section))
+        elements.append(Paragraph("<br/>".join(pag_linhas), style_body))
+        elements.append(Spacer(1, 4))
+
+        elements.append(Paragraph("<b>PRAZOS, CONDICIONANTES E GARANTIA</b>", style_section))
+        prazos_tabela_dados = [
+            [
+                Paragraph(f"<b>Prazo de Mobilização:</b> {prazo_mobilizacao}", style_body),
+                Paragraph(f"<b>Prazo de Germinação:</b> {prazo_germinacao}", style_body)
+            ],
+            [
+                Paragraph(f"<b>Prazo de Execução:</b> {prazo_execucao}", style_body),
+                Paragraph(f"<b>Garantia:</b> {garantia_obra}", style_body)
+            ],
+            [
+                Paragraph(f"<b>Irrigação:</b> {irrigacao_resp}", style_body),
+                Paragraph("<b>Documentação:</b> Enviar Cartão CNPJ, Contrato Social, documentos do representante legal e procuração (se aplicável).", style_body)
+            ]
+        ]
+        t_prazos = Table(prazos_tabela_dados, colWidths=[250, 250])
+        t_prazos.setStyle(TableStyle([
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+            ("TOPPADDING", (0, 0), (-1, -1), 2),
+        ]))
+        elements.append(t_prazos)
+        elements.append(Spacer(1, 6))
+
+        aviso_confidencial = "<font size=6.5><i>Alertamos que o conteúdo da presente Proposta Comercial é CONFIDENCIAL e direcionado única e exclusivamente à empresa acima discriminada, sendo vetada a divulgação, publicação e outros usos desta Proposta Comercial, ou de qualquer parte do seu conteúdo, sem a devida autorização.</i></font>"
+        elements.append(Paragraph(aviso_confidencial, style_body))
+        elements.append(Spacer(1, 6))
+
+        bloco_assinatura = [
+            Paragraph(f"Manaus/AM, {datetime.now().strftime('%d de %B de %Y')}.", style_direita),
+            Spacer(1, 10),
+            Paragraph("<b>ASSINADO DIGITALMENTE</b><br/><b>MJ GOMES DE MORAES</b>", style_centro),
+            Paragraph("<font size=6 color=grey>A conformidade com a assinatura pode ser verificada em https://serpro.gov.br/assinador-digital</font>", style_centro),
+            Spacer(1, 5),
+            Paragraph("__________________________________________________<br/><b>AMAZON PAISAGISTICA AMBIENTAL</b><br/>Departamento Comercial / Técnico", style_centro)
+        ]
+        elements.append(KeepTogether(bloco_assinatura))
+
+        def add_footer(canvas, doc):
+            canvas.saveState()
+            canvas.setFont('Helvetica', 7)
+            canvas.drawString(25, 12, "AMAZON PAISAGISTICA AMBIENTAL - Proposta Comercial")
+            canvas.drawRightString(595 - 25, 12, f"Página {doc.page} de 1")
+            canvas.restoreState()
+
+        doc.build(elements, onFirstPage=add_footer, onLaterPages=add_footer)
+        buffer.seek(0)
+        return buffer
+
+    col_btn1, col_btn2 = st.columns(2)
+    with col_btn1:
+        pdf_bytes = gerar_pdf()
+        st.download_button(
+            label="📥 Baixar Proposta Comercial em PDF",
+            data=pdf_bytes,
+            file_name=f"Proposta_{num_proposta}_{cliente_nome.replace(' ', '_')}.pdf",
+            mime="application/pdf",
+            use_container_width=True,
+        )
+
+    with col_btn2:
+        if st.button("🚀 Registar Proposta na Planilha", use_container_width=True):
+            data_atual = datetime.now().strftime("%d/%m/%Y")
+            
+            servicos_str = ", ".join([s["Serviço"] for s in st.session_state.proposta])
+            valor_formatado_br = formatar_moeda_br(valor_total)
+            
+            linha_dados = [
+                str(num_proposta),
+                str(cliente_nome),
+                str(cliente_cnpj),
+                str(local_obra),
+                str(servicos_str),
+                valor_formatado_br,
+                "Pendente",
+                data_atual
+            ]
+            
+            sucesso, mensagem = guardar_na_planilha(linha_dados)
+            if sucesso:
+                st.success(mensagem)
+            else:
+                st.error(f"Erro ao guardar na planilha: {mensagem}")
+else:
+    st.warning("Adicione pelo menos um serviço na barra lateral para gerar a proposta.")
