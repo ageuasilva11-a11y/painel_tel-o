@@ -44,6 +44,17 @@ def formatar_numero_br(valor):
     return str_val
 
 
+# --- FUNÇÃO DE DATA EM PORTUGUÊS ---
+def obter_data_pt():
+    meses = {
+        1: "janeiro", 2: "fevereiro", 3: "março", 4: "abril",
+        5: "maio", 6: "junho", 7: "julho", 8: "agosto",
+        9: "setembro", 10: "outubro", 11: "novembro", 12: "dezembro"
+    }
+    agora = datetime.now()
+    return f"{agora.day} de {meses[agora.month]} de {agora.year}"
+
+
 st.set_page_config(
     page_title="Gerador de Proposta Comercial", page_icon="📄", layout="wide"
 )
@@ -209,22 +220,22 @@ if st.session_state.proposta:
         style_header_sub = ParagraphStyle("HeaderSub", parent=styles["Normal"], fontSize=7.5, leading=9.5, alignment=1)
         style_section = ParagraphStyle("SecStyle", parent=styles["Heading2"], fontSize=8.5, leading=10.5, textColor=colors.HexColor("#004d00"), spaceBefore=5, spaceAfter=2)
         style_body = ParagraphStyle("BodyStyle", parent=styles["Normal"], fontSize=7.5, leading=9.5)
-        style_bold = ParagraphStyle("BoldStyle", parent=styles["Normal"], fontSize=7.5, leading=9.5, fontName="Helvetica-Bold")
+        style_bold_center = ParagraphStyle("BoldCenter", parent=styles["Normal"], fontSize=7.5, leading=9.5, alignment=1, fontName="Helvetica-Bold")
         style_direita = ParagraphStyle("DireitaStyle", parent=styles["Normal"], fontSize=7.5, leading=9.5, alignment=2)
         style_centro = ParagraphStyle("CentroStyle", parent=styles["Normal"], fontSize=7.5, leading=9.5, alignment=1)
 
-        # Cabeçalho Centralizado Sem Logo
+        # Cabeçalho Centralizado Completo
         elements.append(Paragraph("<b>AMAZON</b>", style_header_main))
         elements.append(Paragraph("<b>HIDROSSEMEADURA</b>", style_title))
         elements.append(Spacer(1, 2))
-        elements.append(Paragraph("<b>AMAZON PAISAGISTICA AMBIENTAL</b>", style_bold))
+        elements.append(Paragraph("<b>AMAZON PAISAGISTICA AMBIENTAL</b>", style_bold_center))
         elements.append(Paragraph("CNPJ n. 44.246.097/0001-92 | Insc. Municipal: 52393501<br/>Rua Patrai, 385 - SI 04 - Nova Cidade | CEP: 69.097-305 - Manaus/AM<br/>Fone: +55 92 3085-5885 | 99190-6445 | e-mail: amazonpaisagistica@gmail.com", style_header_sub))
 
         elements.append(Spacer(1, 6))
         elements.append(Paragraph(f"<b>PROPOSTA COMERCIAL - N° {num_proposta}</b>", style_title))
         elements.append(Spacer(1, 3))
 
-        data_atual_str = datetime.now().strftime("%d de %B de %Y")
+        data_atual_str = obter_data_pt()
         dados_cliente = f"""
         <b>Cliente:</b> {cliente_nome}<br/>
         <b>CNPJ:</b> {cliente_cnpj}<br/>
@@ -248,7 +259,8 @@ if st.session_state.proposta:
             ])
         table_data.append(["", "VALOR GLOBAL DA PROPOSTA", "", "", formatar_moeda_br(valor_total)])
 
-        t = Table(table_data, colWidths=[25, 335, 65, 80, 95])
+        # Larguras ajustadas para evitar sobreposições (Total de largura útil = ~545 pt)
+        t = Table(table_data, colWidths=[30, 265, 75, 80, 95])
         t.setStyle(TableStyle([
             ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#004d00")),
             ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
@@ -297,7 +309,7 @@ if st.session_state.proposta:
                 Paragraph("<b>Documentação:</b> Enviar Cartão CNPJ, Contrato Social, documentos do representante legal e procuração (se aplicável).", style_body)
             ]
         ]
-        t_prazos = Table(prazos_tabela_dados, colWidths=[250, 250])
+        t_prazos = Table(prazos_tabela_dados, colWidths=[272, 273])
         t_prazos.setStyle(TableStyle([
             ("VALIGN", (0, 0), (-1, -1), "TOP"),
             ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
@@ -310,12 +322,10 @@ if st.session_state.proposta:
         elements.append(Paragraph(aviso_confidencial, style_body))
         elements.append(Spacer(1, 6))
 
+        # Bloco de Assinatura limpo (sem texto de assinatura digital)
         bloco_assinatura = [
-            Paragraph(f"Manaus/AM, {datetime.now().strftime('%d de %B de %Y')}.", style_direita),
-            Spacer(1, 10),
-            Paragraph("<b>ASSINADO DIGITALMENTE</b><br/><b>MJ GOMES DE MORAES</b>", style_centro),
-            Paragraph("<font size=6 color=grey>A conformidade com a assinatura pode ser verificada em https://serpro.gov.br/assinador-digital</font>", style_centro),
-            Spacer(1, 5),
+            Paragraph(f"Manaus/AM, {data_atual_str}.", style_direita),
+            Spacer(1, 20),
             Paragraph("__________________________________________________<br/><b>AMAZON PAISAGISTICA AMBIENTAL</b><br/>Departamento Comercial / Técnico", style_centro)
         ]
         elements.append(KeepTogether(bloco_assinatura))
