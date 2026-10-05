@@ -6,7 +6,7 @@ import streamlit as st
 
 st.set_page_config(page_title="Painel de Orçamentos", page_icon="📊", layout="wide")
 
-st.title("📊 Painel de Gestão e Acompanhamento de Orçamentos")
+st.title("📊 Telão - Acompanhamento de Orçamentos")
 
 
 def obter_conexao_sheets():
@@ -44,11 +44,33 @@ try:
     if dados:
         df = pd.DataFrame(dados)
 
-        st.subheader("📋 Tabela do Telão")
-        st.dataframe(df, use_container_width=True)
+        # Garantir coluna de Status padronizada
+        col_status_nome = "Status" if "Status" in df.columns else df.columns[6]
+
+        # Filtragem das duas tabelas
+        df_concretizados = df[df[col_status_nome].str.strip().str.lower() == "concretizada"]
+        df_em_andamento = df[df[col_status_nome].str.strip().str.lower() != "concretizada"]
+
+        # --- TABELA 1: EM ACOMPANHAMENTO ---
+        st.subheader("⏳ Orçamentos em Acompanhamento (Pendente / Negociação / Revisada)")
+        if not df_em_andamento.empty:
+            st.dataframe(df_em_andamento, use_container_width=True)
+        else:
+            st.info("Nenhum orçamento pendente ou em negociação no momento.")
 
         st.markdown("---")
-        st.subheader("⚙️ Alterar Status de uma Proposta")
+
+        # --- TABELA 2: CONCRETIZADOS ---
+        st.subheader("✅ Orçamentos Concretizados")
+        if not df_concretizados.empty:
+            st.dataframe(df_concretizados, use_container_width=True)
+        else:
+            st.info("Nenhum orçamento concretizado registado até ao momento.")
+
+        st.markdown("---")
+
+        # --- BLOCO DE ATUALIZAÇÃO DE STATUS ---
+        st.subheader("⚙️ Alterar Status de um Orçamento")
 
         col1, col2, col3 = st.columns([2, 2, 1])
         
@@ -67,7 +89,7 @@ try:
             if st.button("🔄 Atualizar Status", use_container_width=True):
                 try:
                     idx_linha = lista_propostas.index(prop_selecionada) + 2
-                    col_status_idx = df.columns.get_loc("Status") + 1 if "Status" in df.columns else 7
+                    col_status_idx = df.columns.get_loc(col_status_nome) + 1
                     
                     worksheet.update_cell(idx_linha, col_status_idx, novo_status)
                     st.success(f"Status do Orçamento '{prop_selecionada}' atualizado para '{novo_status}'!")
