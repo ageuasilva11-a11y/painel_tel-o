@@ -8,7 +8,7 @@ st.set_page_config(page_title="Painel de Orçamentos", page_icon="📊", layout=
 
 st.title("📊 Painel de Gestão e Acompanhamento de Orçamentos")
 
-# --- CONEXÃO AO GOOGLE SHEETS ---
+
 def obter_conexao_sheets():
     scopes = [
         "https://www.googleapis.com/auth/spreadsheets",
@@ -26,6 +26,7 @@ def obter_conexao_sheets():
         creds = Credentials.from_service_account_file("service_account.json", scopes=scopes)
         return gspread.authorize(creds)
     return None
+
 
 try:
     client = obter_conexao_sheets()
@@ -51,8 +52,8 @@ try:
 
         col1, col2, col3 = st.columns([2, 2, 1])
         
-        # Lista de propostas para escolher qual alterar
-        lista_propostas = df["Nº Orçamento"].astype(str).tolist() if "Nº Orçamento" in df.columns else []
+        col_orcamento = "Nº Orçamento" if "Nº Orçamento" in df.columns else df.columns[0]
+        lista_propostas = [str(val) for val in df[col_orcamento].tolist()]
         
         with col1:
             prop_selecionada = st.selectbox("Selecione o Nº do Orçamento", lista_propostas)
@@ -64,17 +65,13 @@ try:
             st.write(" ")
             st.write(" ")
             if st.button("🔄 Atualizar Status", use_container_width=True):
-                # Encontra a linha no Google Sheets e atualiza a coluna de Status
                 try:
-                    cell = worksheet.find(prop_selecionada)
-                    if cell:
-                        # Descobre qual a coluna do "Status" (normalmente G / Coluna 7)
-                        col_status = df.columns.get_loc("Status") + 1 if "Status" in df.columns else 7
-                        worksheet.update_cell(cell.row, col_status, novo_status)
-                        st.success(f"Status do Orçamento {prop_selecionada} atualizado para '{novo_status}'!")
-                        st.rerun()
-                    else:
-                        st.error("Orçamento não encontrado na planilha.")
+                    idx_linha = lista_propostas.index(prop_selecionada) + 2
+                    col_status_idx = df.columns.get_loc("Status") + 1 if "Status" in df.columns else 7
+                    
+                    worksheet.update_cell(idx_linha, col_status_idx, novo_status)
+                    st.success(f"Status do Orçamento '{prop_selecionada}' atualizado para '{novo_status}'!")
+                    st.rerun()
                 except Exception as ex:
                     st.error(f"Erro ao atualizar status: {ex}")
     else:
