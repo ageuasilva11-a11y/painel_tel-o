@@ -40,7 +40,6 @@ try:
 
     sheet = client.open(nome_planilha)
     
-    # 1. Carrega os orçamentos
     try:
         worksheet = sheet.worksheet("Orcamentos")
     except Exception:
@@ -73,7 +72,7 @@ try:
 
         st.markdown("---")
 
-        # --- TABELA 3: PAINEL GERAL DE ACOMPANHAMENTO DAS OBRAS ---
+        # --- TABELA 3: ACOMPANHAMENTO DE OBRAS ---
         st.subheader("📋 Painel Geral de Acompanhamento das Obras")
         try:
             ws_obras = sheet.worksheet("Obras")
@@ -86,52 +85,6 @@ try:
         except Exception:
             st.info("Nenhuma aba 'Obras' encontrada na planilha ainda.")
 
-        st.markdown("---")
-
-        # --- BLOCO DE ATUALIZAÇÃO DE STATUS DE ORÇAMENTO ---
-        st.subheader("⚙️ Alterar Status de um Orçamento")
-
-        col1, col2, col3 = st.columns([2, 2, 1])
-        
-        col_orcamento = "Nº Orçamento" if "Nº Orçamento" in df.columns else df.columns[0]
-        lista_propostas = [str(val).strip() for val in df[col_orcamento].tolist()]
-        opcoes_status = ["Pendente", "Negociação", "Revisada", "Concretizada"]
-
-        with col1:
-            prop_selecionada = st.selectbox("Selecione o Nº do Orçamento", lista_propostas)
-
-        # Identifica o status atual do orçamento selecionado na planilha
-        idx_selecionado = lista_propostas.index(prop_selecionada)
-        status_atual_planilha = str(df.iloc[idx_selecionado][col_status_nome]).strip()
-
-        # Encontra o índice correspondente nas opções de status (padrão 0 = Pendente)
-        idx_status_padrao = 0
-        for i, opt in enumerate(opcoes_status):
-            if opt.lower() == status_atual_planilha.lower():
-                idx_status_padrao = i
-                break
-
-        with col2:
-            novo_status = st.selectbox(
-                "Novo Status", 
-                opcoes_status, 
-                index=idx_status_padrao,
-                key=f"status_select_{prop_selecionada}"
-            )
-
-        with col3:
-            st.write(" ")
-            st.write(" ")
-            if st.button("🔄 Atualizar Status", use_container_width=True):
-                try:
-                    idx_linha = idx_selecionado + 2
-                    col_status_idx = df.columns.get_loc(col_status_nome) + 1
-                    
-                    worksheet.update_cell(idx_linha, col_status_idx, novo_status)
-                    st.success(f"Status do Orçamento '{prop_selecionada}' atualizado para '{novo_status}'!")
-                    st.rerun()
-                except Exception as ex:
-                    st.error(f"Erro ao atualizar status: {ex}")
     else:
         st.info("Nenhum orçamento encontrado na planilha.")
 
