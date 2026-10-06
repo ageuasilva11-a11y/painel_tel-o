@@ -30,11 +30,17 @@ def obter_conexao_sheets():
 
 try:
     client = obter_conexao_sheets()
+    if not client:
+        st.error("Não foi possível estabelecer ligação com o Google Sheets.")
+        st.stop()
+
     nome_planilha = "Orcamentos"
     if "google_sheets" in st.secrets and "planilha_nome" in st.secrets["google_sheets"]:
         nome_planilha = st.secrets["google_sheets"]["planilha_nome"]
 
     sheet = client.open(nome_planilha)
+    
+    # 1. Carrega os orçamentos
     try:
         worksheet = sheet.worksheet("Orcamentos")
     except Exception:
@@ -67,7 +73,22 @@ try:
 
         st.markdown("---")
 
-        # --- BLOCO DE ATUALIZAÇÃO DE STATUS ---
+        # --- TABELA 3: PAINEL GERAL DE ACOMPANHAMENTO DAS OBRAS ---
+        st.subheader("📋 Painel Geral de Acompanhamento das Obras")
+        try:
+            ws_obras = sheet.worksheet("Obras")
+            dados_obras = ws_obras.get_all_records()
+            if dados_obras:
+                df_obras = pd.DataFrame(dados_obras)
+                st.dataframe(df_obras, use_container_width=True)
+            else:
+                st.info("Nenhuma obra cadastrada até ao momento.")
+        except Exception:
+            st.info("Nenhuma aba 'Obras' encontrada na planilha ainda.")
+
+        st.markdown("---")
+
+        # --- BLOCO DE ATUALIZAÇÃO DE STATUS DE ORÇAMENTO ---
         st.subheader("⚙️ Alterar Status de um Orçamento")
 
         col1, col2, col3 = st.columns([2, 2, 1])
