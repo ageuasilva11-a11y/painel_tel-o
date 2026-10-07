@@ -219,18 +219,31 @@ with tab_gestao:
                 st.info("Nenhuma obra cadastrada até ao momento.")
 
         else:
-            st.info("Nenhum orçamento encontrado na planilha.")
+            st.info("Nenum orçamento encontrado na planilha.")
 
     except Exception as e:
         st.error(f"Erro ao ligar ao Google Sheets: {e}")
 
 
 # ==============================================================================
-# TAB 2: CALCULADORA DE CUSTOS DE HIDROSSEMEADURA (BASEADA NA PLANILHA)
+# TAB 2: CALCULADORA DE CUSTOS DE HIDROSSEMEADURA (SELETOR DE SEMENTES)
 # ==============================================================================
 with tab_calculadora:
     st.header("🧮 Calculadora de Composição de Custos e Formação de Preço")
-    st.markdown("Simule os custos operacionais, insumos, mão de obra e margem de lucro por m² baseados na metodologia oficial da **Amazon Paisagística**.")
+    st.markdown("Simule os custos operacionais, escolha a mistura de sementes e insumos, e calcule o preço por m² baseado na metodologia da **Amazon Paisagística**.")
+
+    # BANCO DE DADOS DE INSUMOS E SEMENTES (DA PLANILHA EXCEL)
+    BANCO_INSUMOS = {
+        "Semente Pensacola": {"preco": 92.00, "base_padrao": 40.0},
+        "Semente Batatais": {"preco": 116.67, "base_padrao": 40.0},
+        "Sementes Ruzizienses": {"preco": 17.76, "base_padrao": 30.0},
+        "Sementes Piatã": {"preco": 15.17, "base_padrao": 30.0},
+        "Semente de Painço": {"preco": 48.33, "base_padrao": 20.0},
+        "Mulch": {"preco": 4.75, "base_padrao": 210.0},
+        "Terra Mulch": {"preco": 9.00, "base_padrao": 200.0},
+        "NPK": {"preco": 8.67, "base_padrao": 50.0},
+        "Gesso": {"preco": 2.75, "base_padrao": 40.0},
+    }
 
     col_p1, col_p2, col_p3 = st.columns(3)
 
@@ -252,31 +265,40 @@ with tab_calculadora:
         logistica_diaria = st.number_input("Custo Diário Logística/Diesel (R$/dia)", min_value=0.0, value=2779.40, step=100.0)
 
     st.markdown("---")
-    st.subheader("🌱 Insumos por Base de Aplicação (ex: 2.000 m²)")
+    st.subheader("🌱 Seleção da Mistura de Sementes e Insumos (Base: 2.000 m²)")
 
-    # Tabela padrão de insumos
-    insumos_default = pd.DataFrame([
-        {"Item": "Semente Pensacola", "Base (kg)": 40.0, "Preço R$/kg": 92.00},
-        {"Item": "Mulch", "Base (kg)": 210.0, "Preço R$/kg": 4.75},
-        {"Item": "NPK", "Base (kg)": 50.0, "Preço R$/kg": 8.67},
-        {"Item": "Gesso", "Base (kg)": 40.0, "Preço R$/kg": 2.75},
-    ])
-
-    df_insumos_edit = st.data_editor(
-        insumos_default,
-        num_rows="dynamic",
-        use_container_width=True,
-        key="editor_insumos"
+    # Seletor multi-escolha dos insumos/sementes desejados
+    insumos_selecionados = st.multiselect(
+        "Selecione as sementes e insumos para esta composição:",
+        options=list(BANCO_INSUMOS.keys()),
+        default=["Semente Pensacola", "Mulch", "NPK", "Gesso"]
     )
 
-    # Cálculo dos Insumos
-    fator_escala = area_total_m2 / 2000.0  # Base de 2.000 m²
-    total_insumos_rs = 0.0
+    # Monta a tabela editável dinamicamente com base nas escolhas do usuário
+    dados_tabela = []
+    for item in insumos_selecionados:
+        info = BANCO_INSUMOS[item]
+        dados_tabela.append({
+            "Item": item,
+            "Base (kg)": info["base_padrao"],
+            "Preço R$/kg": info["preco"]
+        })
 
-    if not df_insumos_edit.empty:
+    if dados_tabela:
+        df_insumos_edit = st.data_editor(
+            pd.DataFrame(dados_tabela),
+            num_rows="dynamic",
+            use_container_width=True,
+            key="editor_insumos_dinamico"
+        )
+
+        fator_escala = area_total_m2 / 2000.0
         df_insumos_edit["Qtd Necessária (kg)"] = df_insumos_edit["Base (kg)"] * fator_escala
         df_insumos_edit["Total (R$)"] = df_insumos_edit["Qtd Necessária (kg)"] * df_insumos_edit["Preço R$/kg"]
         total_insumos_rs = df_insumos_edit["Total (R$)"].sum()
+    else:
+        st.warning("Selecione pelo menos uma semente ou insumo para realizar o cálculo.")
+        total_insumos_rs = 0.0
 
     # Cálculo dos Custos Totais Diretos
     total_mo_rs = mo_diaria * dias_estimados
@@ -301,11 +323,11 @@ with tab_calculadora:
 
     # Detalhamento em tabela
     df_resumo = pd.DataFrame([
-        {"Categoria": "Insumos (Sementes, Mulch, NPK, Gesso)", "Valor Total (R$)": total_insumos_rs, "Custo/m²": total_insumos_rs / area_total_m2},
-        {"Categoria": "Mão de Obra (Equipe + Encargos)", "Valor Total (R$)": total_mo_rs, "Custo/m²": total_mo_rs / area_total_m2},
-        {"Categoria": "Logística & Diesel", "Valor Total (R$)": total_logistica_rs, "Custo/m²": total_logistica_rs / area_total_m2},
-        {"Categoria": "Imposto (Simples Nacional)", "Valor Total (R$)": imposto_rs, "Custo/m²": imposto_rs / area_total_m2},
-        {"Categoria": "Lucro Líquido Previsto", "Valor Total (R$)": lucro_bruto_rs, "Custo/m²": lucro_bruto_rs / area_total_m2},
+        {"Categoria": "Insumos e Sementes Selecionadas", "Valor Total (R$)": total_insumos_rs, "Custo/m²": total_insumos_rs / area_total_m2 if area_total_m2 > 0 else 0},
+        {"Categoria": "Mão de Obra (Equipe + Encargos)", "Valor Total (R$)": total_mo_rs, "Custo/m²": total_mo_rs / area_total_m2 if area_total_m2 > 0 else 0},
+        {"Categoria": "Logística & Diesel", "Valor Total (R$)": total_logistica_rs, "Custo/m²": total_logistica_rs / area_total_m2 if area_total_m2 > 0 else 0},
+        {"Categoria": "Imposto (Simples Nacional)", "Valor Total (R$)": imposto_rs, "Custo/m²": imposto_rs / area_total_m2 if area_total_m2 > 0 else 0},
+        {"Categoria": "Lucro Líquido Previsto", "Valor Total (R$)": lucro_bruto_rs, "Custo/m²": lucro_bruto_rs / area_total_m2 if area_total_m2 > 0 else 0},
     ])
 
     st.table(df_resumo.style.format({
