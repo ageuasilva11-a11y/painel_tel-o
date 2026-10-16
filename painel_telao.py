@@ -28,6 +28,25 @@ def obter_conexao_sheets():
     return None
 
 
+def ler_worksheet_como_dataframe(worksheet):
+    all_values = worksheet.get_all_values()
+    if not all_values or len(all_values) < 2:
+        return pd.DataFrame()
+    
+    headers = all_values[0]
+    data = all_values[1:]
+    
+    cleaned_headers = []
+    for i, h in enumerate(headers):
+        h_str = str(h).strip()
+        if not h_str:
+            cleaned_headers.append(f"Coluna_{i+1}")
+        else:
+            cleaned_headers.append(h_str)
+            
+    return pd.DataFrame(data, columns=cleaned_headers)
+
+
 try:
     client = obter_conexao_sheets()
     if not client:
@@ -45,11 +64,9 @@ try:
     except Exception:
         worksheet = sheet.get_worksheet(0)
 
-    dados = worksheet.get_all_records()
-    if dados:
-        df = pd.DataFrame(dados)
-
-        col_status_nome = "Status" if "Status" in df.columns else df.columns[6]
+    df = ler_worksheet_como_dataframe(worksheet)
+    if not df.empty:
+        col_status_nome = "Status" if "Status" in df.columns else (df.columns[6] if len(df.columns) > 6 else df.columns[-1])
 
         df_concretizados = df[df[col_status_nome].astype(str).str.strip().str.lower() == "concretizada"]
         df_em_andamento = df[df[col_status_nome].astype(str).str.strip().str.lower() != "concretizada"]
@@ -72,13 +89,12 @@ try:
 
         st.markdown("---")
 
-        # --- TABELA 3: ACOMPANHAMENTO DE OBRAS ---
+        # --- TABELA 3: PAINEL GERAL DE MEDIÇÃO E OBRAS ---
         st.subheader("📋 Painel Geral de Acompanhamento das Obras")
         try:
             ws_obras = sheet.worksheet("Obras")
-            dados_obras = ws_obras.get_all_records()
-            if dados_obras:
-                df_obras = pd.DataFrame(dados_obras)
+            df_obras = ler_worksheet_como_dataframe(ws_obras)
+            if not df_obras.empty:
                 st.dataframe(df_obras, use_container_width=True)
             else:
                 st.info("Nenhuma obra cadastrada até ao momento.")
