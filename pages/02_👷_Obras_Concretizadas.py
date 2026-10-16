@@ -6,10 +6,9 @@ import streamlit as st
 
 st.set_page_config(page_title="Gestão de Obras e Custos", page_icon="👷", layout="wide")
 
-st.title("👷 Gestão de Obras e Calculadora de Custos")
+st.title("👷 Gestão de Obras e Medições Operacionais")
 
-# Criando abas para organizar as funções
-tab_gestao, tab_calculadora = st.tabs(["📋 Gestão de Status e Obras", "🧮 Calculadora de Custos (Hidrossemeadura)"])
+tab_gestao, tab_calculadora = st.tabs(["📋 Gestão de Status e Medição de Obras", "🧮 Calculadora de Custos"])
 
 
 def obter_conexao_sheets():
@@ -31,8 +30,13 @@ def obter_conexao_sheets():
     return None
 
 
+def formatar_numero_br(valor):
+    str_val = f"{valor:,.2f}"
+    return str_val.replace(",", "X").replace(".", ",").replace("X", ".")
+
+
 # ==============================================================================
-# TAB 1: GESTÃO DE STATUS E OBRAS
+# TAB 1: GESTÃO DE STATUS, MEDIÇÕES E OBRAS
 # ==============================================================================
 with tab_gestao:
     try:
@@ -55,20 +59,21 @@ with tab_gestao:
         dados_orcamentos = ws_orcamentos.get_all_records()
         df_orc = pd.DataFrame(dados_orcamentos) if dados_orcamentos else pd.DataFrame()
 
+        # Estrutura com suporte ao controle de metragem (Área Total, Executada, Restante, %)
+        colunas_obras_padrao = [
+            "Nº Orçamento", "Cliente", "Nº Contrato", 
+            "Área Total (m²)", "Área Executada (m²)", "Área Restante (m²)", "% Concluído",
+            "Fase da Obra", "Status de Pagamento", "Observações"
+        ]
+
         try:
             ws_obras = sheet.worksheet("Obras")
         except Exception:
             ws_obras = sheet.add_worksheet(title="Obras", rows="100", cols="20")
-            ws_obras.append_row([
-                "Nº Orçamento", "Cliente", "Nº Contrato", 
-                "Fase da Obra", "Status de Pagamento", "Observações"
-            ])
+            ws_obras.append_row(colunas_obras_padrao)
 
         dados_obras = ws_obras.get_all_records()
-        df_obras = pd.DataFrame(dados_obras) if dados_obras else pd.DataFrame(columns=[
-            "Nº Orçamento", "Cliente", "Nº Contrato", 
-            "Fase da Obra", "Status de Pagamento", "Observações"
-        ])
+        df_obras = pd.DataFrame(dados_obras) if dados_obras else pd.DataFrame(columns=colunas_obras_padrao)
 
         if not df_orc.empty:
             col_num_orc = "Nº Orçamento" if "Nº Orçamento" in df_orc.columns else df_orc.columns[0]
@@ -78,12 +83,13 @@ with tab_gestao:
             lista_num_orc = [str(val).strip() for val in df_orc[col_num_orc].tolist()]
             opcoes_status_orc = ["Pendente", "Negociação", "Revisada", "Concretizada"]
 
-            st.subheader("⚙️ Alterar Status do Orçamento na Planilha Principal")
+            # --- SEÇÃO 1: ALTERAR STATUS DA PROPOSTA ---
+            st.subheader("⚙️ Alterar Status do Orçamento")
             col_s1, col_s2, col_s3 = st.columns([2, 2, 1])
 
             with col_s1:
                 orc_selecionado_status = st.selectbox(
-                    "Selecione o Nº do Orçamento para Mudar Status", 
+                    "Selecione o Nº do Orçamento", 
                     lista_num_orc,
                     key="select_orc_status"
                 )
@@ -120,7 +126,8 @@ with tab_gestao:
 
             st.markdown("---")
 
-            st.subheader("📝 Cadastrar / Atualizar Dados da Obra Concretizada")
+            # --- SEÇÃO 2: ACOMPANHAMENTO FÍSICO E MEDIÇÃO DAS OBRAS ---
+            st.subheader("📝 Cadastrar e Atualizar Medições da Obra Concretizada")
 
             df_concretizados = df_orc[df_orc[col_status_orc].astype(str).str.strip().str.lower() == "concretizada"]
 
@@ -136,44 +143,79 @@ with tab_gestao:
                     opcoes_concretizados.append(rotulo)
                     mapa_clientes[num_o] = cli
 
-                with st.form("form_obra"):
-                    col_a, col_b = st.columns(2)
+                selecionado = st.selectbox("Selecione a Obra Concretizada", opcoes_concretizados)
+                num_orc_sel = selecionado.split(" - ")[0].strip()
+                cliente_sel = mapa_clientes.get(num_orc_sel, "")
 
-                    with col_a:
-                        selecionado = st.selectbox("Selecione o Orçamento Concretizado", opcoes_concretizados)
-                        num_orc_sel = selecionado.split(" - ")[0].strip()
-                        cliente_sel = mapa_clientes.get(num_orc_sel, "")
+                registro_existente = {}
+                if not df_obras.empty and "Nº Orçamento" in df_obras.columns:
+                    match = df_obras[df_obras["Nº Orçamento"].astype(str).str.strip() == num_orc_sel]
+                    if not match.empty:
+                        registro_existente = match.iloc[0].to_dict()
 
-                        registro_existente = {}
-                        if not df_obras.empty and "Nº Orçamento" in df_obras.columns:
-                            match = df_obras[df_obras["Nº Orçamento"].astype(str).str.strip() == num_orc_sel]
-                            if not match.empty:
-                                registro_existente = match.iloc[0].to_dict()
+                # Leitura e conversão segura das áreas
+                try:
+                    area_tot_val = float(str(registro_existente.get("Área Total (m²)", "100000")).replace(".", "").replace(",", "."))
+                except Exception:
+                    area_tot_val = 100000.0
 
+                try:
+                    area_exec_val = float(str(registro_existente.get("Área Executada (m²)", "50000")).replace(".", "").replace(",", "."))
+                except Exception:
+                    area_exec_val = 0.0
+
+                with st.form("form_medicao_obra"):
+                    col_m1, col_m2 = st.columns(2)
+
+                    with col_m1:
                         num_contrato = st.text_input(
                             "Nº do Contrato", 
-                            value=str(registro_existente.get("Nº Contrato", ""))
+                            value=str(registro_existente.get("Nº Contrato", f"{num_orc_sel}-CONTRATO"))
+                        )
+                        area_total = st.number_input(
+                            "Área Total Contratada (m²)", 
+                            min_value=0.0, 
+                            value=area_tot_val, 
+                            step=1000.0
+                        )
+                        area_executada = st.number_input(
+                            "Área Já Executada / Medida (m²)", 
+                            min_value=0.0, 
+                            max_value=area_total if area_total > 0 else 1000000.0, 
+                            value=area_exec_val, 
+                            step=1000.0
                         )
 
-                    with col_b:
+                    with col_m2:
                         fases_opcoes = ["Início / Mobilização", "Execução", "Fase Final / Acabamento", "Concluída", "Pausada"]
-                        fase_atual = str(registro_existente.get("Fase da Obra", "Início / Mobilização")).strip()
-                        idx_fase = fases_opcoes.index(fase_atual) if fase_atual in fases_opcoes else 0
-
+                        fase_atual = str(registro_existente.get("Fase da Obra", "Execução")).strip()
+                        idx_fase = fases_opcoes.index(fase_atual) if fase_atual in fases_opcoes else 1
                         fase_obra = st.selectbox("Fase da Obra", fases_opcoes, index=idx_fase)
 
                         pag_opcoes = ["Aguardando Sinal", "Parcialmente Pago", "Em Dia", "Atrasado", "Quitado"]
-                        pag_atual = str(registro_existente.get("Status de Pagamento", "Aguardando Sinal")).strip()
-                        idx_pag = pag_opcoes.index(pag_atual) if pag_atual in pag_opcoes else 0
-
+                        pag_atual = str(registro_existente.get("Status de Pagamento", "Em Dia")).strip()
+                        idx_pag = pag_opcoes.index(pag_atual) if pag_atual in pag_opcoes else 2
                         status_pagamento = st.selectbox("Status de Pagamento", pag_opcoes, index=idx_pag)
 
+                    # Cálculo em tempo real dentro do formulário
+                    area_restante = max(0.0, area_total - area_executada)
+                    pct_concluido = (area_executada / area_total * 100.0) if area_total > 0 else 0.0
+
+                    st.markdown("##### 📊 Resumo Físico da Obra")
+                    c_met1, c_met2, c_met3, c_met4 = st.columns(4)
+                    c_met1.metric("Área Total", f"{formatar_numero_br(area_total)} m²")
+                    c_met2.metric("Área Executada", f"{formatar_numero_br(area_executada)} m²")
+                    c_met3.metric("Área Restante", f"{formatar_numero_br(area_restante)} m²")
+                    c_met4.metric("% Concluído", f"{pct_concluido:.1f}%")
+
+                    st.progress(min(1.0, pct_concluido / 100.0))
+
                     obs = st.text_area(
-                        "Observações Gerais / Histórico de Medições", 
+                        "Observações Operacionais / Histórico das Medições", 
                         value=str(registro_existente.get("Observações", ""))
                     )
 
-                    submeter = st.form_submit_button("💾 Salvar Dados da Obra")
+                    submeter = st.form_submit_button("💾 Salvar / Atualizar Medição da Obra", use_container_width=True)
 
                     if submeter:
                         if not num_contrato.strip():
@@ -192,21 +234,25 @@ with tab_gestao:
                                     num_orc_sel,
                                     cliente_sel,
                                     num_contrato.strip(),
+                                    formatar_numero_br(area_total),
+                                    formatar_numero_br(area_executada),
+                                    formatar_numero_br(area_restante),
+                                    f"{pct_concluido:.1f}%",
                                     fase_obra,
                                     status_pagamento,
                                     obs.strip()
                                 ]
 
                                 if linha_encontrada:
-                                    ws_obras.update(f"A{linha_encontrada}:F{linha_encontrada}", [dados_novos])
-                                    st.success(f"Obra referente ao orçamento '{num_orc_sel}' atualizada com sucesso!")
+                                    ws_obras.update(f"A{linha_encontrada}:J{linha_encontrada}", [dados_novos])
+                                    st.success(f"Medição da obra '{num_orc_sel}' atualizada com sucesso!")
                                 else:
                                     ws_obras.append_row(dados_novos)
-                                    st.success(f"Obra referente ao orçamento '{num_orc_sel}' cadastrada com sucesso!")
+                                    st.success(f"Obra '{num_orc_sel}' registrada com sucesso!")
 
                                 st.rerun()
                             except Exception as ex:
-                                st.error(f"Erro ao guardar dados no Google Sheets: {ex}")
+                                st.error(f"Erro ao guardar no Google Sheets: {ex}")
 
             st.markdown("---")
 
@@ -219,20 +265,19 @@ with tab_gestao:
                 st.info("Nenhuma obra cadastrada até ao momento.")
 
         else:
-            st.info("Nenum orçamento encontrado na planilha.")
+            st.info("Nenhum orçamento encontrado na planilha.")
 
     except Exception as e:
         st.error(f"Erro ao ligar ao Google Sheets: {e}")
 
 
 # ==============================================================================
-# TAB 2: CALCULADORA DE CUSTOS DE HIDROSSEMEADURA (SELETOR DE SEMENTES)
+# TAB 2: CALCULADORA DE CUSTOS DE HIDROSSEMEADURA
 # ==============================================================================
 with tab_calculadora:
     st.header("🧮 Calculadora de Composição de Custos e Formação de Preço")
     st.markdown("Simule os custos operacionais, escolha a mistura de sementes e insumos, e calcule o preço por m² baseado na metodologia da **Amazon Paisagística**.")
 
-    # BANCO DE DADOS DE INSUMOS E SEMENTES (DA PLANILHA EXCEL)
     BANCO_INSUMOS = {
         "Semente Pensacola": {"preco": 92.00, "base_padrao": 40.0},
         "Semente Batatais": {"preco": 116.67, "base_padrao": 40.0},
@@ -267,14 +312,12 @@ with tab_calculadora:
     st.markdown("---")
     st.subheader("🌱 Seleção da Mistura de Sementes e Insumos (Base: 2.000 m²)")
 
-    # Seletor multi-escolha dos insumos/sementes desejados
     insumos_selecionados = st.multiselect(
         "Selecione as sementes e insumos para esta composição:",
         options=list(BANCO_INSUMOS.keys()),
         default=["Semente Pensacola", "Mulch", "NPK", "Gesso"]
     )
 
-    # Monta a tabela editável dinamicamente com base nas escolhas do usuário
     dados_tabela = []
     for item in insumos_selecionados:
         info = BANCO_INSUMOS[item]
@@ -300,12 +343,10 @@ with tab_calculadora:
         st.warning("Selecione pelo menos uma semente ou insumo para realizar o cálculo.")
         total_insumos_rs = 0.0
 
-    # Cálculo dos Custos Totais Diretos
     total_mo_rs = mo_diaria * dias_estimados
     total_logistica_rs = logistica_diaria * dias_estimados
     custo_direto_total = total_insumos_rs + total_mo_rs + total_logistica_rs
 
-    # Formação do Preço com Markup
     fator_divisor = (1.0 - margem_lucro_pct - imposto_simples_pct)
     preco_venda_total = custo_direto_total / fator_divisor if fator_divisor > 0 else custo_direto_total * 2.0
     preco_por_m2 = preco_venda_total / area_total_m2 if area_total_m2 > 0 else 0.0
@@ -321,7 +362,6 @@ with tab_calculadora:
     col_r3.metric("Preço por m²", f"R$ {preco_por_m2:,.2f}/m²".replace(",", "X").replace(".", ",").replace("X", "."))
     col_r4.metric("Lucro Bruto Previsto", f"R$ {lucro_bruto_rs:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
 
-    # Detalhamento em tabela
     df_resumo = pd.DataFrame([
         {"Categoria": "Insumos e Sementes Selecionadas", "Valor Total (R$)": total_insumos_rs, "Custo/m²": total_insumos_rs / area_total_m2 if area_total_m2 > 0 else 0},
         {"Categoria": "Mão de Obra (Equipe + Encargos)", "Valor Total (R$)": total_mo_rs, "Custo/m²": total_mo_rs / area_total_m2 if area_total_m2 > 0 else 0},
