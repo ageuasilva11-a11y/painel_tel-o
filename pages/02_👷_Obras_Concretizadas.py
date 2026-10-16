@@ -30,6 +30,28 @@ def obter_conexao_sheets():
     return None
 
 
+def ler_worksheet_como_dataframe(worksheet):
+    """Lê todas as linhas da worksheet com segurança contra colunas sem cabeçalho/vazias."""
+    all_values = worksheet.get_all_values()
+    if not all_values or len(all_values) < 2:
+        return pd.DataFrame()
+    
+    headers = all_values[0]
+    data = all_values[1:]
+    
+    # Substitui cabeçalhos vazios por nomes genéricos para evitar duplicados ('')
+    cleaned_headers = []
+    for i, h in enumerate(headers):
+        h_str = str(h).strip()
+        if not h_str:
+            cleaned_headers.append(f"Coluna_{i+1}")
+        else:
+            cleaned_headers.append(h_str)
+            
+    df = pd.DataFrame(data, columns=cleaned_headers)
+    return df
+
+
 def formatar_numero_br(valor):
     str_val = f"{valor:,.2f}"
     return str_val.replace(",", "X").replace(".", ",").replace("X", ".")
@@ -56,10 +78,8 @@ with tab_gestao:
         except Exception:
             ws_orcamentos = sheet.get_worksheet(0)
 
-        dados_orcamentos = ws_orcamentos.get_all_records()
-        df_orc = pd.DataFrame(dados_orcamentos) if dados_orcamentos else pd.DataFrame()
+        df_orc = ler_worksheet_como_dataframe(ws_orcamentos)
 
-        # Estrutura com suporte ao controle de metragem (Área Total, Executada, Restante, %)
         colunas_obras_padrao = [
             "Nº Orçamento", "Cliente", "Nº Contrato", 
             "Área Total (m²)", "Área Executada (m²)", "Área Restante (m²)", "% Concluído",
@@ -72,13 +92,14 @@ with tab_gestao:
             ws_obras = sheet.add_worksheet(title="Obras", rows="100", cols="20")
             ws_obras.append_row(colunas_obras_padrao)
 
-        dados_obras = ws_obras.get_all_records()
-        df_obras = pd.DataFrame(dados_obras) if dados_obras else pd.DataFrame(columns=colunas_obras_padrao)
+        df_obras = ler_worksheet_como_dataframe(ws_obras)
+        if df_obras.empty:
+            df_obras = pd.DataFrame(columns=colunas_obras_padrao)
 
         if not df_orc.empty:
             col_num_orc = "Nº Orçamento" if "Nº Orçamento" in df_orc.columns else df_orc.columns[0]
             col_cliente = "Cliente" if "Cliente" in df_orc.columns else df_orc.columns[1]
-            col_status_orc = "Status" if "Status" in df_orc.columns else df_orc.columns[6]
+            col_status_orc = "Status" if "Status" in df_orc.columns else (df_orc.columns[6] if len(df_orc.columns) > 6 else df_orc.columns[-1])
 
             lista_num_orc = [str(val).strip() for val in df_orc[col_num_orc].tolist()]
             opcoes_status_orc = ["Pendente", "Negociação", "Revisada", "Concretizada"]
@@ -153,7 +174,6 @@ with tab_gestao:
                     if not match.empty:
                         registro_existente = match.iloc[0].to_dict()
 
-                # Leitura e conversão segura das áreas
                 try:
                     area_tot_val = float(str(registro_existente.get("Área Total (m²)", "100000")).replace(".", "").replace(",", "."))
                 except Exception:
@@ -197,7 +217,6 @@ with tab_gestao:
                         idx_pag = pag_opcoes.index(pag_atual) if pag_atual in pag_opcoes else 2
                         status_pagamento = st.selectbox("Status de Pagamento", pag_opcoes, index=idx_pag)
 
-                    # Cálculo em tempo real dentro do formulário
                     area_restante = max(0.0, area_total - area_executada)
                     pct_concluido = (area_executada / area_total * 100.0) if area_total > 0 else 0.0
 
@@ -222,13 +241,13 @@ with tab_gestao:
                             st.error("Por favor, informe o Nº do Contrato antes de salvar.")
                         else:
                             try:
-                                todas_obras = ws_obras.get_all_records()
+                                df_check = ler_worksheet_como_dataframe(ws_obras)
                                 linha_encontrada = None
 
-                                for idx, row in enumerate(todas_obras, start=2):
-                                    if str(row.get("Nº Orçamento")).strip() == num_orc_sel:
-                                        linha_encontrada = idx
-                                        break
+                                if not df_check.empty and "Nº Orçamento" in df_check.columns:
+                                    lista_orcs_existentes = [str(v).strip() for v in df_check["Nº Orçamento"].tolist()]
+                                    if num_orc_sel in lista_orcs_existentes:
+                                        linha_encontrada = lista_orcs_existentes.index(num_orc_sel) + 2
 
                                 dados_novos = [
                                     num_orc_sel,
@@ -257,10 +276,9 @@ with tab_gestao:
             st.markdown("---")
 
             st.subheader("📋 Painel Geral de Acompanhamento das Obras")
-            dados_obras_atualizados = ws_obras.get_all_records()
-            if dados_obras_atualizados:
-                df_painel_obras = pd.DataFrame(dados_obras_atualizados)
-                st.dataframe(df_painel_obras, use_container_width=True)
+            df_obras_exibir = ler_worksheet_como_dataframe(ws_obras)
+            if not df_obras_exibir.empty:
+                st.dataframe(df_obras_exibir, use_container_width=True)
             else:
                 st.info("Nenhuma obra cadastrada até ao momento.")
 
